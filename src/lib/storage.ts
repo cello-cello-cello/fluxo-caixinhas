@@ -23,7 +23,7 @@ function toInteger(value: unknown, fallback = 0): number {
   return Number.isFinite(parsed) ? Math.round(parsed) : fallback
 }
 
-function toColor(value: unknown, fallback = '#FF385C'): string {
+function toColor(value: unknown, fallback = '#4A6B53'): string {
   return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value : fallback
 }
 

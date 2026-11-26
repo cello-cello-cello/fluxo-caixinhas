@@ -3,15 +3,15 @@ export default {
   theme: {
     extend: {
       colors: {
-        coral: {
-          DEFAULT: '#FF385C',
-          soft: '#FFF1F3',
-          dark: '#E11D48',
+        navy: {
+          DEFAULT: '#1E3A5F',
+          soft: '#E9EFF5',
+          dark: '#0F2942',
         },
-        mint: {
-          DEFAULT: '#10B981',
-          soft: '#ECFDF5',
-          dark: '#059669',
+        moss: {
+          DEFAULT: '#4A6B53',
+          soft: '#EAF1EC',
+          dark: '#3A5743',
         },
       },
       fontFamily: {

@@ -5,7 +5,7 @@ describe('importação e validação', () => {
   it('aceita um JSON completo válido', () => {
     const original = createInitialState(2026)
     original.initialBalanceCents = 10_000
-    original.boxes = [{ id: 'b1', name: 'Reserva', color: '#10B981', balanceCents: 2_000, goalCents: 9_000 }]
+    original.boxes = [{ id: 'b1', name: 'Reserva', color: '#1E3A5F', balanceCents: 2_000, goalCents: 9_000 }]
     original.transactions = [
       { id: 't1', date: '2026-01-02', description: 'Salário', category: 'Outros', type: 'entrada', amountCents: 5_000 },
     ]
@@ -30,14 +30,14 @@ describe('importação e validação', () => {
 
     expect(imported?.boxes).toHaveLength(1)
     expect(imported?.boxes[0].balanceCents).toBe(0)
-    expect(imported?.boxes[0].color).toBe('#FF385C')
+    expect(imported?.boxes[0].color).toBe('#4A6B53')
     expect(imported?.transactions).toHaveLength(1)
     expect(imported?.transactions[0].id).toBe('ok')
   })
 
   it('lê CSV em pt-BR e resolve caixinha por nome', () => {
     const state = createInitialState(2026)
-    state.boxes = [{ id: 'b1', name: 'Viagem', color: '#FF385C', balanceCents: 0, goalCents: 1_000 }]
+    state.boxes = [{ id: 'b1', name: 'Viagem', color: '#4A6B53', balanceCents: 0, goalCents: 1_000 }]
 
     const csv = [
       'data;descricao;categoria;tipo;valor;caixinha_id;caixinha_nome',

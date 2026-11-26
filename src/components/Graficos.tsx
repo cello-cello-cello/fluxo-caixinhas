@@ -22,7 +22,7 @@ export function Graficos({ state, flow, position }: GraficosProps) {
     .sort((a, b) => b.value - a.value)
 
   const wealthSegments = [
-    { label: 'Saldo livre', value: position.freeBalanceCents, color: '#FF385C' },
+    { label: 'Saldo livre', value: position.freeBalanceCents, color: '#1E3A5F' },
     { label: 'Caixinhas', value: position.totalBoxCents, color: '#6366F1' },
   ]
 
@@ -34,7 +34,7 @@ export function Graficos({ state, flow, position }: GraficosProps) {
   return (
     <section>
       <header className="mb-4">
-        <p className="text-xs font-bold uppercase tracking-[0.16em] text-coral">Leitura visual</p>
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-navy">Leitura visual</p>
         <h2 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-900">Gráficos</h2>
         <p className="mt-1 text-sm text-slate-500">Posição atual e composição dos gastos de {state.year}.</p>
       </header>
@@ -63,22 +63,22 @@ export function Graficos({ state, flow, position }: GraficosProps) {
                 <div className="flex items-center gap-2">
                   <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-50">
                     <div
-                      className="h-full rounded-full bg-mint transition-all duration-500"
+                      className="h-full rounded-full bg-moss transition-all duration-500"
                       style={{ width: `${(month.incomeCents / maxMonthly) * 100}%` }}
                     />
                   </div>
-                  <span className="money w-20 text-right text-[10px] font-bold text-mint-dark">
+                  <span className="money w-20 text-right text-[10px] font-bold text-moss-dark">
                     {formatBRL(month.incomeCents)}
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-50">
                     <div
-                      className="h-full rounded-full bg-coral transition-all duration-500"
+                      className="h-full rounded-full bg-navy transition-all duration-500"
                       style={{ width: `${(month.expenseCents / maxMonthly) * 100}%` }}
                     />
                   </div>
-                  <span className="money w-20 text-right text-[10px] font-bold text-coral">
+                  <span className="money w-20 text-right text-[10px] font-bold text-navy">
                     {formatBRL(month.expenseCents)}
                   </span>
                 </div>

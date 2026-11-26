@@ -29,11 +29,39 @@ describe('fluxo de caixa encadeado', () => {
     expect(flow.closingBalanceCents).toBe(99_000)
   })
 
+  it('soma várias entradas e saídas no mesmo dia e recalcula após exclusão', () => {
+    const state = createInitialState(2026)
+    state.initialBalanceCents = 100_000
+    state.transactions = [
+      transaction({ id: 'e1', date: '2026-01-10', type: 'entrada', amountCents: 5_000 }),
+      transaction({ id: 'e2', date: '2026-01-10', type: 'entrada', amountCents: 2_000 }),
+      transaction({ id: 's1', date: '2026-01-10', type: 'saida', amountCents: 1_000 }),
+      transaction({ id: 's2', date: '2026-01-10', type: 'saida', amountCents: 500 }),
+    ]
+
+    const flow = calculateAnnualFlow(state, 2026)
+    const januaryDay = flow.months[0].days[9]
+
+    expect(januaryDay.transactions).toHaveLength(4)
+    expect(januaryDay.incomeCents).toBe(7_000)
+    expect(januaryDay.expenseCents).toBe(1_500)
+    expect(flow.months[11].closingBalanceCents).toBe(105_500)
+
+    const afterDeletion = {
+      ...state,
+      transactions: state.transactions.filter((item) => item.id !== 'e2'),
+    }
+    const recalculated = calculateAnnualFlow(afterDeletion, 2026)
+
+    expect(recalculated.months[0].days[9].incomeCents).toBe(5_000)
+    expect(recalculated.months[11].closingBalanceCents).toBe(103_500)
+  })
+
   it('separa transferências de caixinha das saídas de consumo', () => {
     const state = createInitialState(2026)
     state.initialBalanceCents = 100_000
     state.boxes = [
-      { id: 'viagem', name: 'Viagem', color: '#FF385C', balanceCents: 50_000, goalCents: 200_000 },
+      { id: 'viagem', name: 'Viagem', color: '#4A6B53', balanceCents: 50_000, goalCents: 200_000 },
     ]
     state.transactions = [
       transaction({ date: '2026-02-05', type: 'guardar', amountCents: 20_000, boxId: 'viagem' }),

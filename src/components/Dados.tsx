@@ -57,7 +57,7 @@ export function Dados({
   return (
     <section>
       <header className="mb-4">
-        <p className="text-xs font-bold uppercase tracking-[0.16em] text-coral">Seu arquivo</p>
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-navy">Seu arquivo</p>
         <h2 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-900">Dados</h2>
         <p className="mt-1 text-sm text-slate-500">Tudo fica no seu dispositivo e pode ser exportado quando quiser.</p>
       </header>
@@ -65,7 +65,7 @@ export function Dados({
       <div className="grid gap-3 lg:grid-cols-2">
         <article className="card">
           <div className="mb-4 flex items-center gap-2">
-            <Database size={17} className="text-coral" />
+            <Database size={17} className="text-navy" />
             <h3 className="text-[15px] font-bold text-slate-900">Configurações do ano</h3>
           </div>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -82,7 +82,7 @@ export function Dados({
                 </div>
               </div>
             </div>
-            {error && <p role="alert" className="rounded-2xl bg-coral-soft px-4 py-3 text-sm font-semibold text-coral">{error}</p>}
+            {error && <p role="alert" className="rounded-2xl bg-navy-soft px-4 py-3 text-sm font-semibold text-navy">{error}</p>}
             <button type="submit" className="btn-primary w-full sm:w-auto">Salvar configurações</button>
           </form>
           <p className="mt-4 text-xs leading-relaxed text-slate-400">
@@ -92,15 +92,15 @@ export function Dados({
 
         <article className="card">
           <div className="mb-4 flex items-center gap-2">
-            <Download size={17} className="text-mint-dark" />
+            <Download size={17} className="text-moss-dark" />
             <h3 className="text-[15px] font-bold text-slate-900">Exportar</h3>
           </div>
           <div className="space-y-2">
             <button type="button" className="btn-soft w-full justify-start" onClick={onExportJson}>
-              <FileJson size={16} className="text-coral" /> JSON completo (caixinhas + lançamentos)
+              <FileJson size={16} className="text-navy" /> JSON completo (caixinhas + lançamentos)
             </button>
             <button type="button" className="btn-soft w-full justify-start" onClick={onExportTransactionsCsv}>
-              <FileSpreadsheet size={16} className="text-mint-dark" /> CSV de lançamentos do ano
+              <FileSpreadsheet size={16} className="text-moss-dark" /> CSV de lançamentos do ano
             </button>
             <button type="button" className="btn-soft w-full justify-start" onClick={onExportBoxesCsv}>
               <FileSpreadsheet size={16} className="text-indigo-500" /> CSV de caixinhas
@@ -140,10 +140,10 @@ export function Dados({
           />
           <div className="space-y-2">
             <button type="button" className="btn-soft w-full justify-start" onClick={() => jsonInput.current?.click()}>
-              <FileJson size={16} className="text-coral" /> JSON (substitui todos os dados)
+              <FileJson size={16} className="text-navy" /> JSON (substitui todos os dados)
             </button>
             <button type="button" className="btn-soft w-full justify-start" onClick={() => csvInput.current?.click()}>
-              <FileSpreadsheet size={16} className="text-mint-dark" /> CSV (substitui lançamentos do ano)
+              <FileSpreadsheet size={16} className="text-moss-dark" /> CSV (substitui lançamentos do ano)
             </button>
           </div>
           <p className="mt-4 text-xs leading-relaxed text-slate-400">
@@ -168,7 +168,7 @@ export function Dados({
               setConfirmReset(false)
             }}
             className={`mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-bold transition sm:w-auto ${
-              confirmReset ? 'border-coral bg-coral text-white' : 'border-slate-200 text-slate-500 hover:text-coral'
+              confirmReset ? 'border-navy bg-navy text-white' : 'border-slate-200 text-slate-500 hover:text-navy'
             }`}
           >
             <RotateCcw size={16} /> {confirmReset ? 'Confirmar limpeza' : 'Limpar todos os dados'}

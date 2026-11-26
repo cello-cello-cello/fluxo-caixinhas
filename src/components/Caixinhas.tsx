@@ -21,7 +21,7 @@ export function Caixinhas({ state, position, onAdd, onEdit, onDelete, onTransfer
     <section>
       <header className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.16em] text-coral">Reservas separadas</p>
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-navy">Reservas separadas</p>
           <h2 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-900">Caixinhas</h2>
           <p className="mt-1 text-sm text-slate-500">Guardar e resgatar nunca viram gasto de consumo.</p>
         </div>
@@ -41,13 +41,13 @@ export function Caixinhas({ state, position, onAdd, onEdit, onDelete, onTransfer
         </div>
         <div className="col-span-2 sm:col-span-1">
           <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Parcela reservada</p>
-          <p className="money mt-1 text-lg font-extrabold text-mint-dark">{Math.round(cards * 100)}%</p>
+          <p className="money mt-1 text-lg font-extrabold text-moss-dark">{Math.round(cards * 100)}%</p>
         </div>
       </div>
 
       {state.boxes.length === 0 ? (
         <div className="card flex flex-col items-center py-12 text-center">
-          <div className="grid h-16 w-16 place-items-center rounded-full bg-coral-soft text-coral">
+          <div className="grid h-16 w-16 place-items-center rounded-full bg-navy-soft text-navy">
             <Sparkles size={26} />
           </div>
           <h3 className="mt-4 text-lg font-extrabold text-slate-900">Sua primeira caixinha</h3>
@@ -102,7 +102,7 @@ export function Caixinhas({ state, position, onAdd, onEdit, onDelete, onTransfer
                     </p>
                   )}
                   {box.yieldRate !== undefined && (
-                    <p className="flex items-center gap-2 text-mint-dark">
+                    <p className="flex items-center gap-2 text-moss-dark">
                       <Sparkles size={14} />
                       {formatPercent(box.yieldRate)} · projeção {formatBRL(projection)}
                       {gain > 0 && <span className="money font-bold">(+{formatBRL(gain)})</span>}

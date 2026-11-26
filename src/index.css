@@ -7,7 +7,7 @@
 :root {
   font-family: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
   color: #0f172a;
-  background: #ffffff;
+  background: #f8fafc;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -44,7 +44,7 @@ select {
   }
 
   .field {
-    @apply w-full rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-[15px] text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-coral focus:bg-white focus:ring-4 focus:ring-coral/10;
+    @apply w-full rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-[15px] text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-navy focus:bg-white focus:ring-4 focus:ring-navy/10;
   }
 
   .label {
@@ -52,7 +52,7 @@ select {
   }
 
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 rounded-2xl bg-coral px-5 py-3 text-sm font-bold text-white shadow-lift transition active:scale-[0.98] hover:bg-coral-dark disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-2 rounded-2xl bg-navy px-5 py-3 text-sm font-bold text-white shadow-lift transition active:scale-[0.98] hover:bg-navy-dark disabled:cursor-not-allowed disabled:opacity-50;
   }
 
   .btn-soft {

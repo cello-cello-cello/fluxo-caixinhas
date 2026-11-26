@@ -1,4 +1,5 @@
-import { CalendarDays, ChevronRight, Plus } from 'lucide-react'
+import { useCallback, useEffect, useRef } from 'react'
+import { CalendarDays, ChevronLeft, ChevronRight, Plus } from 'lucide-react'
 import { daysInMonth, MONTH_SHORT, MONTH_NAMES } from '../lib/dates'
 import { formatBRL, formatBRLCompact } from '../lib/money'
 import type { AnnualFlow, Transaction } from '../types'
@@ -27,12 +28,28 @@ export function FluxoAnual({
   onEditTransaction,
 }: FluxoAnualProps) {
   const month = flow.months[focusedMonth]
+  const monthStripRef = useRef<HTMLDivElement>(null)
+
+  const scrollToMonth = useCallback((index: number) => {
+    const button = monthStripRef.current?.querySelector<HTMLButtonElement>(`[data-month="${index}"]`)
+    button?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest', inline: 'center' })
+  }, [])
+
+  useEffect(() => {
+    scrollToMonth(focusedMonth)
+  }, [focusedMonth, scrollToMonth])
+
+  function moveMonth(delta: number) {
+    const next = Math.min(11, Math.max(0, focusedMonth + delta))
+    onFocusedMonth(next)
+    scrollToMonth(next)
+  }
 
   return (
     <section>
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.16em] text-coral">Fluxo encadeado</p>
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-navy">Fluxo encadeado</p>
           <h2 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-900">Ano de {flow.year}</h2>
           <p className="mt-1 text-sm text-slate-500">Cada lançamento recalcula todos os saldos seguintes.</p>
         </div>
@@ -58,27 +75,54 @@ export function FluxoAnual({
         </div>
       </div>
 
-      <div className="no-scrollbar mb-4 flex gap-2 overflow-x-auto pb-1">
-        {flow.months.map((item) => (
-          <button
-            key={item.month}
-            type="button"
-            onClick={() => onFocusedMonth(item.month)}
-            aria-label={`${MONTH_NAMES[item.month]}: fechamento ${formatBRL(item.closingBalanceCents)}`}
-            className={`min-w-[92px] rounded-2xl border px-3 py-2.5 text-left transition ${
-              focusedMonth === item.month
-                ? 'border-coral bg-coral-soft'
-                : 'border-slate-100 bg-white hover:border-slate-200'
-            }`}
-          >
-            <span className={`block text-[11px] font-bold uppercase tracking-wide ${focusedMonth === item.month ? 'text-coral' : 'text-slate-400'}`}>
-              {MONTH_SHORT[item.month]}
-            </span>
-            <span className="money mt-1 block text-xs font-extrabold text-slate-700">
-              {formatBRLCompact(item.closingBalanceCents)}
-            </span>
-          </button>
-        ))}
+      <div className="mb-4 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => moveMonth(-1)}
+          disabled={focusedMonth === 0}
+          aria-label="Mês anterior"
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-slate-200 bg-white text-navy transition hover:border-navy hover:bg-navy-soft disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <ChevronLeft size={18} />
+        </button>
+
+        <div
+          ref={monthStripRef}
+          className="no-scrollbar flex flex-1 touch-pan-x gap-2 overflow-x-auto scroll-smooth pb-1"
+        >
+          {flow.months.map((item) => (
+            <button
+              key={item.month}
+              data-month={item.month}
+              type="button"
+              onClick={() => onFocusedMonth(item.month)}
+              aria-label={`${MONTH_NAMES[item.month]}: fechamento ${formatBRL(item.closingBalanceCents)}`}
+              aria-current={focusedMonth === item.month ? 'true' : undefined}
+              className={`min-w-[92px] shrink-0 rounded-2xl border px-3 py-2.5 text-left transition ${
+                focusedMonth === item.month
+                  ? 'border-navy bg-navy-soft'
+                  : 'border-slate-100 bg-white hover:border-slate-200'
+              }`}
+            >
+              <span className={`block text-[11px] font-bold uppercase tracking-wide ${focusedMonth === item.month ? 'text-navy' : 'text-slate-400'}`}>
+                {MONTH_SHORT[item.month]}
+              </span>
+              <span className="money mt-1 block text-xs font-extrabold text-slate-700">
+                {formatBRLCompact(item.closingBalanceCents)}
+              </span>
+            </button>
+          ))}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => moveMonth(1)}
+          disabled={focusedMonth === 11}
+          aria-label="Próximo mês"
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-slate-200 bg-white text-navy transition hover:border-navy hover:bg-navy-soft disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <ChevronRight size={18} />
+        </button>
       </div>
 
       {viewMode === 'month' ? (
@@ -96,8 +140,8 @@ export function FluxoAnual({
           </header>
 
           <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <MiniStat label="Entradas" value={month.incomeCents} tone="text-mint-dark" />
-            <MiniStat label="Saídas" value={month.expenseCents} tone="text-coral" />
+            <MiniStat label="Entradas" value={month.incomeCents} tone="text-moss-dark" />
+            <MiniStat label="Saídas" value={month.expenseCents} tone="text-navy" />
             <MiniStat label="Para caixinhas" value={month.toBoxCents} tone="text-indigo-500" />
             <MiniStat label="Fechamento" value={month.closingBalanceCents} tone="text-slate-900" />
           </div>
@@ -121,10 +165,10 @@ export function FluxoAnual({
                     </span>
                     <span className="mt-1 flex flex-wrap gap-1.5">
                       {day.incomeCents > 0 && (
-                        <span className="chip bg-mint-soft text-mint-dark">+ {formatBRLCompact(day.incomeCents)}</span>
+                        <span className="chip bg-moss-soft text-moss-dark">+ {formatBRLCompact(day.incomeCents)}</span>
                       )}
                       {day.expenseCents > 0 && (
-                        <span className="chip bg-coral-soft text-coral">− {formatBRLCompact(day.expenseCents)}</span>
+                        <span className="chip bg-navy-soft text-navy">− {formatBRLCompact(day.expenseCents)}</span>
                       )}
                       {(day.toBoxCents > 0 || day.fromBoxCents > 0) && (
                         <span className="chip bg-indigo-50 text-indigo-500">Caixinha</span>
@@ -162,12 +206,12 @@ export function FluxoAnual({
         <article className="card !p-3 sm:!p-5">
           <div className="mb-3 flex items-center justify-between gap-3 px-2">
             <p className="flex items-center gap-2 text-xs text-slate-500">
-              <CalendarDays size={15} className="text-coral" />
+              <CalendarDays size={15} className="text-navy" />
               Arraste para o lado para ver os 12 meses
             </p>
             <div className="hidden items-center gap-3 text-[11px] font-semibold text-slate-400 sm:flex">
-              <span className="flex items-center gap-1"><i className="h-2 w-2 rounded-full bg-mint" /> entrada</span>
-              <span className="flex items-center gap-1"><i className="h-2 w-2 rounded-full bg-coral" /> saída</span>
+              <span className="flex items-center gap-1"><i className="h-2 w-2 rounded-full bg-moss" /> entrada</span>
+              <span className="flex items-center gap-1"><i className="h-2 w-2 rounded-full bg-navy" /> saída</span>
               <span className="flex items-center gap-1"><i className="h-2 w-2 rounded-full bg-indigo-400" /> caixinha</span>
             </div>
           </div>
@@ -184,7 +228,7 @@ export function FluxoAnual({
                       <button
                         type="button"
                         onClick={() => onOpenMonth(item.month)}
-                        className="text-[11px] font-extrabold uppercase tracking-wide text-slate-500 transition hover:text-coral"
+                        className="text-[11px] font-extrabold uppercase tracking-wide text-slate-500 transition hover:text-navy"
                         title={`Adicionar lançamento em ${MONTH_NAMES[item.month]}`}
                       >
                         {MONTH_SHORT[item.month]}
@@ -216,8 +260,8 @@ export function FluxoAnual({
                                 {formatBRLCompact(dayFlow.balanceCents)}
                               </span>
                               <span className="mt-1 flex justify-center gap-1">
-                                {dayFlow.incomeCents > 0 && <i className="h-1.5 w-1.5 rounded-full bg-mint" />}
-                                {dayFlow.expenseCents > 0 && <i className="h-1.5 w-1.5 rounded-full bg-coral" />}
+                                {dayFlow.incomeCents > 0 && <i className="h-1.5 w-1.5 rounded-full bg-moss" />}
+                                {dayFlow.expenseCents > 0 && <i className="h-1.5 w-1.5 rounded-full bg-navy" />}
                                 {(dayFlow.toBoxCents > 0 || dayFlow.fromBoxCents > 0) && (
                                   <i className="h-1.5 w-1.5 rounded-full bg-indigo-400" />
                                 )}

@@ -67,7 +67,7 @@ export function CaixinhaModal({ box, onClose, onSave, onDelete }: CaixinhaModalP
       <div role="dialog" aria-modal="true" aria-labelledby="caixinha-title" className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-4xl bg-white p-5 shadow-2xl sm:rounded-4xl sm:p-7">
         <header className="mb-5 flex items-start justify-between gap-3">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.16em] text-coral">Caixinha</p>
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-navy">Caixinha</p>
             <h2 id="caixinha-title" className="mt-1 text-xl font-extrabold text-slate-900">
               {box ? 'Editar caixinha' : 'Nova caixinha'}
             </h2>
@@ -156,7 +156,7 @@ export function CaixinhaModal({ box, onClose, onSave, onDelete }: CaixinhaModalP
           </p>
 
           {error && (
-            <p role="alert" className="rounded-2xl bg-coral-soft px-4 py-3 text-sm font-semibold text-coral">{error}</p>
+            <p role="alert" className="rounded-2xl bg-navy-soft px-4 py-3 text-sm font-semibold text-navy">{error}</p>
           )}
 
           <div className="flex flex-col gap-2 pt-2 sm:flex-row-reverse">
@@ -172,7 +172,7 @@ export function CaixinhaModal({ box, onClose, onSave, onDelete }: CaixinhaModalP
                   onDelete(box.id)
                 }}
                 className={`inline-flex w-full items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-bold transition sm:w-auto ${
-                  confirmDelete ? 'border-coral bg-coral text-white' : 'border-slate-200 text-slate-500 hover:text-coral'
+                  confirmDelete ? 'border-navy bg-navy text-white' : 'border-slate-200 text-slate-500 hover:text-navy'
                 }`}
               >
                 <Trash2 size={16} /> {confirmDelete ? 'Confirmar exclusão' : 'Excluir'}

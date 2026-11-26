@@ -98,17 +98,16 @@ export default function App() {
         ? previous.transactions.map((item) => (item.id === transaction.id ? transaction : item))
         : [...previous.transactions, transaction],
     }))
-    setDraft(null)
     setToast('Lançamento salvo. Saldos recalculados em cascata.')
   }
 
-  function deleteTransaction(id: string) {
+  function deleteTransaction(id: string, closeAfter = false) {
     setState((previous) => ({
       ...previous,
       transactions: previous.transactions.filter((item) => item.id !== id),
     }))
-    setDraft(null)
-    setToast('Lançamento excluído.')
+    if (closeAfter) setDraft(null)
+    setToast('Lançamento excluído. Saldos recalculados.')
   }
 
   function saveBox(box: Box) {
@@ -174,11 +173,11 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-white text-slate-900">
+    <div className="min-h-screen bg-slate-50 text-slate-900">
       <header className="sticky top-0 z-20 border-b border-slate-100 bg-white/85 backdrop-blur-xl">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3.5">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-coral text-white shadow-lift">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-navy text-white shadow-lift">
               <Waves size={20} strokeWidth={2.4} />
             </div>
             <div className="min-w-0">
@@ -220,7 +219,7 @@ export default function App() {
                 onClick={() => setTab(item.id)}
                 aria-current={tab === item.id ? 'page' : undefined}
                 className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-bold transition ${
-                  tab === item.id ? 'border-coral text-coral' : 'border-transparent text-slate-400 hover:text-slate-700'
+                  tab === item.id ? 'border-navy text-navy' : 'border-transparent text-slate-400 hover:text-slate-700'
                 }`}
               >
                 <Icon size={16} /> {item.label}
@@ -294,7 +293,7 @@ export default function App() {
                 onClick={() => setTab(item.id)}
                 aria-current={tab === item.id ? 'page' : undefined}
                 className={`flex flex-col items-center gap-1 py-2.5 text-[10px] font-bold transition ${
-                  tab === item.id ? 'text-coral' : 'text-slate-400'
+                  tab === item.id ? 'text-navy' : 'text-slate-400'
                 }`}
               >
                 <Icon size={19} strokeWidth={tab === item.id ? 2.6 : 2} />

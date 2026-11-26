@@ -30,7 +30,8 @@ function chunk(type, data) {
 function makeIcon(size, maskable) {
   const rowBytes = size * 3
   const raw = Buffer.alloc((rowBytes + 1) * size)
-  const coral = [255, 56, 92]
+  const navy = [30, 58, 95]
+  const moss = [74, 107, 83]
   const white = [255, 255, 255]
   const outer = maskable ? 0.34 : 0.42
   const inner = outer - 0.09
@@ -44,7 +45,7 @@ function makeIcon(size, maskable) {
       const distance = Math.sqrt(dx * dx + dy * dy)
       const isRing = distance <= outer && distance >= inner
       const isDot = distance <= 0.075
-      const color = isRing || isDot ? white : coral
+      const color = isDot ? moss : isRing ? white : navy
       const index = rowStart + 1 + x * 3
       raw[index] = color[0]
       raw[index + 1] = color[1]
