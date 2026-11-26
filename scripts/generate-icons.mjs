@@ -33,8 +33,11 @@ function makeIcon(size, maskable) {
   const navy = [30, 58, 95]
   const moss = [74, 107, 83]
   const white = [255, 255, 255]
-  const outer = maskable ? 0.34 : 0.42
-  const inner = outer - 0.09
+  const scale = maskable ? 0.72 : 1
+  const amplitude = 0.095 * scale
+  const thickness = 0.05 * scale
+  const upperCenter = -0.105 * scale
+  const lowerCenter = 0.105 * scale
 
   for (let y = 0; y < size; y += 1) {
     const rowStart = y * (rowBytes + 1)
@@ -42,10 +45,10 @@ function makeIcon(size, maskable) {
     for (let x = 0; x < size; x += 1) {
       const dx = (x + 0.5 - size / 2) / size
       const dy = (y + 0.5 - size / 2) / size
-      const distance = Math.sqrt(dx * dx + dy * dy)
-      const isRing = distance <= outer && distance >= inner
-      const isDot = distance <= 0.075
-      const color = isDot ? moss : isRing ? white : navy
+      const wave = Math.sin((dx + 0.5) * Math.PI * 2) * amplitude
+      const upperWave = Math.abs(dy - (upperCenter + wave)) <= thickness / 2
+      const lowerWave = Math.abs(dy - (lowerCenter + wave)) <= thickness / 2
+      const color = upperWave ? white : lowerWave ? moss : navy
       const index = rowStart + 1 + x * 3
       raw[index] = color[0]
       raw[index + 1] = color[1]

@@ -3,16 +3,12 @@ export default {
   theme: {
     extend: {
       colors: {
-        navy: {
-          DEFAULT: '#1E3A5F',
-          soft: '#E9EFF5',
-          dark: '#0F2942',
-        },
-        moss: {
-          DEFAULT: '#4A6B53',
-          soft: '#EAF1EC',
-          dark: '#3A5743',
-        },
+        navy: '#1E3A5F',
+        'navy-dark': '#0F2942',
+        'navy-soft': '#E9EFF5',
+        moss: '#4A6B53',
+        'moss-dark': '#3A5743',
+        'moss-soft': '#EAF1EC',
       },
       fontFamily: {
         sans: ['"Plus Jakarta Sans"', 'ui-sans-serif', 'system-ui', 'sans-serif'],

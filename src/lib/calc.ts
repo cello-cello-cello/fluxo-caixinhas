@@ -1,8 +1,63 @@
-import { daysInMonth, isoDate, todayIso } from './dates'
+import {
+  daysInMonth,
+  isoDate,
+  parseIsoDate,
+  previousBusinessDayInMonthIso,
+  previousBusinessDayIso,
+  todayIso,
+} from './dates'
 import type { AnnualFlow, AppState, Box, DayFlow, MonthFlow, Position, Transaction } from '../types'
 
 function sortTransactions(transactions: Transaction[]): Transaction[] {
   return [...transactions].sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id))
+}
+
+function effectiveDate(date: string, adjustToBusinessDay?: boolean): string {
+  return adjustToBusinessDay ? previousBusinessDayIso(date) : date
+}
+
+function recurrenceDate(year: number, month: number, day: number, adjustToBusinessDay?: boolean): string {
+  const limit = daysInMonth(year, month)
+  const targetDay = Math.min(day, limit)
+  if (!adjustToBusinessDay) return isoDate(year, month, targetDay)
+  if (day > limit) return previousBusinessDayInMonthIso(year, month, targetDay)
+  return previousBusinessDayIso(isoDate(year, month, targetDay))
+}
+
+export function expandTransactions(transactions: Transaction[]): Transaction[] {
+  return transactions.flatMap((transaction) => {
+    if (!transaction.recurrenceDay) {
+      return [{ ...transaction, date: effectiveDate(transaction.date, transaction.adjustToBusinessDay) }]
+    }
+    const parsed = parseIsoDate(transaction.date)
+    if (!parsed) return [transaction]
+
+    const day = Math.max(1, Math.min(31, transaction.recurrenceDay))
+    const occurrences: Transaction[] = []
+    const startIndex = parsed.year * 12 + parsed.month
+    const endIndex = (parsed.year + 1) * 12 + 11
+
+    for (let index = startIndex; index <= endIndex; index += 1) {
+      const year = Math.floor(index / 12)
+      const month = index % 12
+      occurrences.push({
+        ...transaction,
+        id: index === startIndex ? transaction.id : `${transaction.id}:${year}-${month + 1}`,
+        date: recurrenceDate(year, month, day, transaction.adjustToBusinessDay),
+        sourceId: transaction.id,
+      })
+    }
+
+    return occurrences
+  })
+}
+
+export function resolveBaseId(transactions: Transaction[], id: string): string {
+  return transactions.find((transaction) => transaction.id === id)?.sourceId ?? id
+}
+
+function matchesId(transaction: Transaction, id?: string): boolean {
+  return !id || (transaction.sourceId ?? transaction.id) === id
 }
 
 function applyTransaction(
@@ -38,17 +93,47 @@ function initialBoxBalances(boxes: Box[]): Record<string, number> {
   return Object.fromEntries(boxes.map((box) => [box.id, box.balanceCents]))
 }
 
+function baseYear(state: AppState, transactions: Transaction[]): number {
+  return Math.min(state.year, ...transactions.map((transaction) => parseYear(transaction.date)))
+}
+
+export function carryIn(
+  state: AppState,
+  year: number,
+  excludeId?: string,
+): { freeCents: number; boxBalances: Record<string, number> } {
+  const freeBalance = { value: state.initialBalanceCents }
+  const boxBalances = initialBoxBalances(state.boxes)
+  const allTransactions = expandTransactions(state.transactions)
+  const firstYear = baseYear(state, allTransactions)
+  const cutoff = isoDate(year, 0, 1)
+
+  const transactions = sortTransactions(
+    allTransactions.filter(
+      (transaction) =>
+        transaction.date < cutoff && matchesId(transaction, excludeId) && parseYear(transaction.date) >= firstYear,
+    ),
+  )
+
+  for (const transaction of transactions) {
+    applyTransaction(transaction, freeBalance, boxBalances)
+  }
+
+  return { freeCents: freeBalance.value, boxBalances }
+}
+
 export function calculateAnnualFlow(state: AppState, year: number): AnnualFlow {
   const byDate = new Map<string, Transaction[]>()
 
-  for (const transaction of state.transactions) {
+  for (const transaction of expandTransactions(state.transactions)) {
     if (parseYear(transaction.date) !== year) continue
     const list = byDate.get(transaction.date) ?? []
     list.push(transaction)
     byDate.set(transaction.date, list)
   }
 
-  const freeBalance = { value: state.initialBalanceCents }
+  const openingBalanceCents = carryIn(state, year).freeCents
+  const freeBalance = { value: openingBalanceCents }
   const months: MonthFlow[] = []
 
   for (let month = 0; month < 12; month += 1) {
@@ -118,7 +203,7 @@ export function calculateAnnualFlow(state: AppState, year: number): AnnualFlow {
 
   return {
     year,
-    openingBalanceCents: state.initialBalanceCents,
+    openingBalanceCents,
     closingBalanceCents: freeBalance.value,
     totalIncomeCents: months.reduce((sum, item) => sum + item.incomeCents, 0),
     totalExpenseCents: months.reduce((sum, item) => sum + item.expenseCents, 0),
@@ -129,11 +214,17 @@ export function calculateAnnualFlow(state: AppState, year: number): AnnualFlow {
 }
 
 export function calculatePosition(state: AppState, upToDate: string, excludeId?: string): Position {
-  const freeBalance = { value: state.initialBalanceCents }
-  const boxBalances = initialBoxBalances(state.boxes)
+  const cutoffYear = parseYear(upToDate)
+  const opening = carryIn(state, cutoffYear, excludeId)
+  const freeBalance = { value: opening.freeCents }
+  const boxBalances = opening.boxBalances
+  const startOfYear = isoDate(cutoffYear, 0, 1)
 
   const transactions = sortTransactions(
-    state.transactions.filter((transaction) => transaction.date <= upToDate && transaction.id !== excludeId),
+    expandTransactions(state.transactions).filter(
+      (transaction) =>
+        transaction.date >= startOfYear && transaction.date <= upToDate && matchesId(transaction, excludeId),
+    ),
   )
 
   for (const transaction of transactions) {
@@ -165,11 +256,16 @@ export function availableFor(
   boxId: string | undefined,
   excludeId?: string,
 ): { freeCents: number; boxCents: number } {
-  const freeBalance = { value: state.initialBalanceCents }
-  const boxBalances = initialBoxBalances(state.boxes)
+  const cutoffYear = parseYear(date)
+  const opening = carryIn(state, cutoffYear, excludeId)
+  const freeBalance = { value: opening.freeCents }
+  const boxBalances = opening.boxBalances
+  const startOfYear = isoDate(cutoffYear, 0, 1)
 
   const transactions = sortTransactions(
-    state.transactions.filter((transaction) => transaction.date <= date && transaction.id !== excludeId),
+    expandTransactions(state.transactions).filter(
+      (transaction) => transaction.date >= startOfYear && transaction.date <= date && matchesId(transaction, excludeId),
+    ),
   )
 
   for (const transaction of transactions) {

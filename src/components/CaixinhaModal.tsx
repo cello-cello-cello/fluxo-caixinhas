@@ -115,7 +115,7 @@ export function CaixinhaModal({ box, onClose, onSave, onDelete }: CaixinhaModalP
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label className="label" htmlFor="caixinha-saldo">Saldo inicial no ano (R$)</label>
+              <label className="label" htmlFor="caixinha-saldo">Saldo base no 1º ano (R$)</label>
               <div className="relative">
                 <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">R$</span>
                 <input id="caixinha-saldo" className="field money !pl-11" inputMode="decimal" value={balance} onChange={(event) => setBalance(event.target.value)} />
@@ -152,7 +152,7 @@ export function CaixinhaModal({ box, onClose, onSave, onDelete }: CaixinhaModalP
           </div>
 
           <p className="text-xs text-slate-400">
-            O saldo inicial é considerado em 01/jan e as transferências do ano são aplicadas em sequência.
+            O saldo base é considerado em 01/jan do 1º ano; a cada ano seguinte, o fechamento de dezembro vira a abertura de janeiro.
           </p>
 
           {error && (

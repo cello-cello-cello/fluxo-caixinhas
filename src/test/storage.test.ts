@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { createInitialState, parseJsonImport, parseTransactionsCsv, sanitizeState } from '../lib/storage'
+import {
+  createInitialState,
+  exportBoxesCsv,
+  exportTransactionsCsv,
+  parseJsonImport,
+  parseTransactionsCsv,
+  sanitizeState,
+} from '../lib/storage'
 
 describe('importação e validação', () => {
   it('aceita um JSON completo válido', () => {
@@ -51,5 +58,133 @@ describe('importação e validação', () => {
     expect(parsed?.transactions).toHaveLength(2)
     expect(parsed?.transactions[0].amountCents).toBe(12_345)
     expect(parsed?.transactions[1].boxId).toBe('b1')
+  })
+
+  it('migra a categoria antiga Casa para Moradia', () => {
+    const imported = sanitizeState({
+      version: 1,
+      year: 2026,
+      initialBalanceCents: 1_000,
+      boxes: [],
+      transactions: [
+        { id: 'casa', date: '2026-03-01', description: 'Aluguel', category: 'Casa', type: 'saida', amountCents: 100 },
+      ],
+    })
+
+    expect(imported?.transactions[0].category).toBe('Moradia')
+  })
+
+  it('exporta o saldo da caixinha já propagado para o ano selecionado', () => {
+    const state = createInitialState(2027)
+    state.boxes = [{ id: 'b1', name: 'Viagem', color: '#4A6B53', balanceCents: 1_000, goalCents: 10_000 }]
+    state.transactions = [
+      { id: 'g1', date: '2026-05-01', description: 'Guardar', category: 'Caixinhas', type: 'guardar', amountCents: 2_000, boxId: 'b1' },
+    ]
+
+    expect(exportBoxesCsv(state)).toContain('30,00')
+  })
+
+  it('preserva a recorrência e descarta marcadores de ocorrência na sanitização', () => {
+    const imported = sanitizeState({
+      version: 1,
+      year: 2026,
+      initialBalanceCents: 0,
+      boxes: [],
+      transactions: [
+        {
+          id: 'aluguel',
+          date: '2026-01-31',
+          description: 'Aluguel',
+          category: 'Moradia',
+          type: 'saida',
+          amountCents: 1_000,
+          recurrenceDay: 31,
+          sourceId: 'origem',
+        },
+      ],
+    })
+
+    expect(imported?.transactions[0].recurrenceDay).toBe(31)
+    expect(imported?.transactions[0].sourceId).toBeUndefined()
+  })
+
+  it('exporta todas as ocorrências recorrentes do ano', () => {
+    const state = createInitialState(2026)
+    state.transactions = [
+      {
+        id: 'aluguel',
+        date: '2026-01-31',
+        description: 'Aluguel',
+        category: 'Moradia',
+        type: 'saida',
+        amountCents: 1_000,
+        recurrenceDay: 31,
+      },
+    ]
+
+    const csv = exportTransactionsCsv(state)
+
+    expect(csv).toContain('2026-02-28')
+    expect(csv).toContain('2026-04-30')
+  })
+
+  it('preserva a antecipação para dia útil na sanitização', () => {
+    const imported = sanitizeState({
+      version: 1,
+      year: 2026,
+      initialBalanceCents: 0,
+      boxes: [],
+      transactions: [
+        {
+          id: 'cafe',
+          date: '2026-09-19',
+          description: 'Café',
+          category: 'Alimentação',
+          type: 'saida',
+          amountCents: 1_000,
+          adjustToBusinessDay: true,
+        },
+      ],
+    })
+
+    expect(imported?.transactions[0].adjustToBusinessDay).toBe(true)
+  })
+
+  it('exporta a data já antecipada para o dia útil anterior', () => {
+    const state = createInitialState(2026)
+    state.transactions = [
+      {
+        id: 'cafe',
+        date: '2026-09-20',
+        description: 'Café',
+        category: 'Alimentação',
+        type: 'saida',
+        amountCents: 1_000,
+        adjustToBusinessDay: true,
+      },
+    ]
+
+    expect(exportTransactionsCsv(state)).toContain('2026-09-18')
+  })
+
+  it('exporta a recorrência iniciada em dezembro nos meses do ano seguinte', () => {
+    const state = createInitialState(2027)
+    state.transactions = [
+      {
+        id: 'aluguel',
+        date: '2026-12-15',
+        description: 'Aluguel',
+        category: 'Moradia',
+        type: 'saida',
+        amountCents: 1_000,
+        recurrenceDay: 15,
+      },
+    ]
+
+    const csv = exportTransactionsCsv(state)
+
+    expect(csv).toContain('2027-01-15')
+    expect(csv).toContain('2027-12-15')
+    expect(csv).not.toContain('2026-12-15')
   })
 })

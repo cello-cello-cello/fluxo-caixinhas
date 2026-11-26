@@ -37,7 +37,7 @@ export function Caixinhas({ state, position, onAdd, onEdit, onDelete, onTransfer
         </div>
         <div>
           <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Em caixinhas</p>
-          <p className="money mt-1 text-lg font-extrabold text-indigo-500">{formatBRL(position.totalBoxCents)}</p>
+          <p className="money mt-1 text-lg font-extrabold text-[#1E3A5F]">{formatBRL(position.totalBoxCents)}</p>
         </div>
         <div className="col-span-2 sm:col-span-1">
           <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Parcela reservada</p>

@@ -15,8 +15,19 @@ export const MONTH_NAMES = [
 
 export const MONTH_SHORT = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
 
+export const WEEKDAY_SHORT = ['dom.', 'seg.', 'ter.', 'qua.', 'qui.', 'sex.', 'sáb.'] as const
+
 export function daysInMonth(year: number, month: number): number {
   return new Date(year, month + 1, 0).getDate()
+}
+
+export function weekdayShort(year: number, month: number, day: number): string {
+  return WEEKDAY_SHORT[new Date(year, month, day).getDay()]
+}
+
+export function isWeekend(year: number, month: number, day: number): boolean {
+  const weekday = new Date(year, month, day).getDay()
+  return weekday === 0 || weekday === 6
 }
 
 export function isoDate(year: number, month: number, day: number): string {
@@ -51,6 +62,21 @@ export function addDaysIso(value: string, days: number): string {
   const date = new Date(parsed.year, parsed.month, parsed.day)
   date.setDate(date.getDate() + days)
   return dateToIso(date)
+}
+
+export function previousBusinessDayIso(value: string): string {
+  const parsed = parseIsoDate(value)
+  if (!parsed) return value
+  const date = new Date(parsed.year, parsed.month, parsed.day)
+  if (date.getDay() === 6) date.setDate(date.getDate() - 1)
+  if (date.getDay() === 0) date.setDate(date.getDate() - 2)
+  return dateToIso(date)
+}
+
+export function previousBusinessDayInMonthIso(year: number, month: number, day: number): string {
+  let current = Math.max(1, Math.min(day, daysInMonth(year, month)))
+  while (current > 1 && isWeekend(year, month, current)) current -= 1
+  return isoDate(year, month, current)
 }
 
 export function formatDate(value: string): string {

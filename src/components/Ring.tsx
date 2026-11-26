@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { CHART_COLORS } from '../lib/constants'
 
 interface RingProps {
   progress: number
@@ -15,9 +16,9 @@ export function Ring({ progress, color, size = 92, stroke = 9, label, children }
   const circumference = 2 * Math.PI * radius
 
   return (
-    <div className="relative shrink-0" style={{ width: size, height: size }} role="img" aria-label={label}>
+    <div className="relative shrink-0" style={{ width: size, height: size }} role="img" aria-label={label ?? 'Progresso'}>
       <svg width={size} height={size} className="-rotate-90" aria-hidden="true">
-        <circle cx={size / 2} cy={size / 2} r={radius} stroke="#F1F5F9" strokeWidth={stroke} fill="none" />
+        <circle cx={size / 2} cy={size / 2} r={radius} stroke={CHART_COLORS.track} strokeWidth={stroke} fill="none" />
         <circle
           cx={size / 2}
           cy={size / 2}

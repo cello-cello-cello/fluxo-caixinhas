@@ -1,3 +1,4 @@
+import { carryIn, expandTransactions } from './calc'
 import { BOX_COLORS } from './constants'
 import { isValidIsoDate } from './dates'
 import type { AppState, Box, Transaction, TransactionType } from '../types'
@@ -59,8 +60,12 @@ function sanitizeTransaction(value: unknown, boxIds: Set<string>): Transaction |
   if (amountCents === 0) return null
 
   const description = typeof value.description === 'string' ? value.description.trim().slice(0, 140) : ''
-  const category = typeof value.category === 'string' && value.category.trim() ? value.category.trim() : 'Outros'
+  const rawCategory = typeof value.category === 'string' && value.category.trim() ? value.category.trim() : 'Outros'
+  const category = rawCategory === 'Casa' ? 'Moradia' : rawCategory
   const boxId = typeof value.boxId === 'string' && boxIds.has(value.boxId) ? value.boxId : undefined
+  const recurrenceValue = toInteger(value.recurrenceDay)
+  const recurrenceDay = recurrenceValue > 0 ? Math.min(31, recurrenceValue) : undefined
+  const adjustToBusinessDay = value.adjustToBusinessDay === true ? true : undefined
 
   if ((type === 'guardar' || type === 'resgatar') && !boxId) return null
 
@@ -72,6 +77,8 @@ function sanitizeTransaction(value: unknown, boxIds: Set<string>): Transaction |
     type,
     amountCents,
     boxId,
+    recurrenceDay,
+    adjustToBusinessDay,
   }
 }
 
@@ -143,7 +150,7 @@ export function exportTransactionsCsv(state: AppState): string {
   const names = new Map(state.boxes.map((box) => [box.id, box.name]))
   const rows = [
     ['data', 'descricao', 'categoria', 'tipo', 'valor', 'caixinha_id', 'caixinha_nome'],
-    ...sortByDate(state.transactions)
+    ...sortByDate(expandTransactions(state.transactions))
       .filter((transaction) => transaction.date.startsWith(`${state.year}-`))
       .map((transaction) => [
         transaction.date,
@@ -159,12 +166,13 @@ export function exportTransactionsCsv(state: AppState): string {
 }
 
 export function exportBoxesCsv(state: AppState): string {
+  const boxBalances = carryIn(state, state.year).boxBalances
   const rows = [
     ['nome', 'cor', 'saldo_inicial', 'meta', 'data_alvo', 'rendimento_anual'],
     ...state.boxes.map((box) => [
       box.name,
       box.color,
-      csvAmount(box.balanceCents),
+      csvAmount(boxBalances[box.id] ?? box.balanceCents),
       csvAmount(box.goalCents),
       box.targetDate ?? '',
       box.yieldRate === undefined ? '' : String(box.yieldRate).replace('.', ','),

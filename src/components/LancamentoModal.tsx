@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { ArrowDownLeft, ArrowUpRight, PiggyBank, Trash2, Undo2, X } from 'lucide-react'
-import { availableFor } from '../lib/calc'
-import { TRANSACTION_TYPES } from '../lib/constants'
-import { isoDate } from '../lib/dates'
+import { ArrowDownLeft, ArrowUpRight, Pencil, PiggyBank, Trash2, Undo2, X } from 'lucide-react'
+import { availableFor, expandTransactions, resolveBaseId } from '../lib/calc'
+import { CATEGORIES, categoryColor, CHART_COLORS, TRANSACTION_TYPES } from '../lib/constants'
+import { formatDate, isoDate, parseIsoDate, previousBusinessDayIso } from '../lib/dates'
 import { centsToInput, formatBRL, formatBRLCompact, parseAmountToCents } from '../lib/money'
 import { createId } from '../lib/storage'
 import type { AppState, Transaction, TransactionType } from '../types'
@@ -30,6 +30,33 @@ const TYPE_LABELS = Object.fromEntries(
   TRANSACTION_TYPES.map((option) => [option.value, option.label]),
 ) as Record<TransactionType, string>
 
+const TYPE_STYLES: Record<TransactionType, { active: string; idle: string; surface: string; text: string }> = {
+  entrada: {
+    active: 'border-[#4A6B53] bg-[#EEF4F0] text-[#3A5743]',
+    idle: 'border-slate-200 text-slate-500 hover:border-[#4A6B53] hover:text-[#3A5743]',
+    surface: 'bg-[#EEF4F0] text-[#3A5743]',
+    text: 'text-[#3A5743]',
+  },
+  saida: {
+    active: 'border-[#C0604D] bg-[#FFF3EF] text-[#A64B39]',
+    idle: 'border-slate-200 text-slate-500 hover:border-[#C0604D] hover:text-[#A64B39]',
+    surface: 'bg-[#FFF3EF] text-[#A64B39]',
+    text: 'text-[#A64B39]',
+  },
+  guardar: {
+    active: 'border-[#1E3A5F] bg-[#E9EFF5] text-[#1E3A5F]',
+    idle: 'border-slate-200 text-slate-500 hover:border-[#1E3A5F] hover:text-[#1E3A5F]',
+    surface: 'bg-[#E9EFF5] text-[#1E3A5F]',
+    text: 'text-[#1E3A5F]',
+  },
+  resgatar: {
+    active: 'border-[#1E3A5F] bg-[#E9EFF5] text-[#1E3A5F]',
+    idle: 'border-slate-200 text-slate-500 hover:border-[#1E3A5F] hover:text-[#1E3A5F]',
+    surface: 'bg-[#E9EFF5] text-[#1E3A5F]',
+    text: 'text-[#1E3A5F]',
+  },
+}
+
 export function LancamentoModal({
   state,
   initialDate,
@@ -49,20 +76,30 @@ export function LancamentoModal({
   const [error, setError] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(transaction?.sourceId ?? transaction?.id ?? null)
+  const [editingYear, setEditingYear] = useState<number | null>(
+    transaction ? parseIsoDate(transaction.date)?.year ?? null : null,
+  )
+  const [repeatMonthly, setRepeatMonthly] = useState(transaction?.recurrenceDay !== undefined)
+  const [adjustToBusinessDay, setAdjustToBusinessDay] = useState(transaction?.adjustToBusinessDay === true)
   const firstField = useRef<HTMLInputElement>(null)
 
   const isTransfer = type === 'guardar' || type === 'resgatar'
+  const minDate = isoDate(editingYear === null ? state.year : Math.min(state.year, editingYear), 0, 1)
+  const maxDate = isoDate(editingYear === null ? state.year : Math.max(state.year, editingYear), 11, 31)
+  const expandedTransactions = useMemo(() => expandTransactions(state.transactions), [state.transactions])
+  const effectiveDate = useMemo(
+    () => (adjustToBusinessDay ? previousBusinessDayIso(date) : date),
+    [adjustToBusinessDay, date],
+  )
   const available = useMemo(
-    () => availableFor(state, date, boxId, transaction?.id),
-    [state, date, boxId, transaction?.id],
+    () => availableFor(state, effectiveDate, boxId, editingId ?? undefined),
+    [state, effectiveDate, boxId, editingId],
   )
 
   const dayTransactions = useMemo(
-    () =>
-      state.transactions
-        .filter((item) => item.date === date)
-        .sort((a, b) => a.id.localeCompare(b.id)),
-    [state.transactions, date],
+    () => expandedTransactions.filter((item) => item.date === date).sort((a, b) => a.id.localeCompare(b.id)),
+    [expandedTransactions, date],
   )
 
   const dayIncome = dayTransactions
@@ -94,7 +131,11 @@ export function LancamentoModal({
     const amountCents = parseAmountToCents(amount)
     if (!description.trim()) return setError('Informe uma descrição.')
     if (!amountCents) return setError('Informe um valor em R$ maior que zero.')
-    if (!date.startsWith(`${state.year}-`)) return setError(`A data deve estar no ano de ${state.year}.`)
+    const parsedDate = parseIsoDate(date)
+    if (!parsedDate) return setError('Informe uma data válida.')
+    if (parsedDate.year !== state.year && parsedDate.year !== editingYear) {
+      return setError(`A data deve estar no ano de ${state.year}${editingYear === null ? '' : ` ou ${editingYear}`}.`)
+    }
     if (isTransfer && !boxId) return setError('Selecione uma caixinha.')
 
     if (type === 'guardar' && amountCents > available.freeCents) {
@@ -105,16 +146,18 @@ export function LancamentoModal({
     }
 
     onSave({
-      id: transaction?.id ?? createId(),
+      id: editingId ?? createId(),
       date,
       description: description.trim(),
       category: isTransfer ? 'Caixinhas' : category,
       type,
       amountCents,
       boxId: isTransfer ? boxId : undefined,
+      recurrenceDay: repeatMonthly ? parsedDate.day : undefined,
+      adjustToBusinessDay,
     })
 
-    if (transaction) {
+    if (editingId) {
       onClose()
       return
     }
@@ -125,14 +168,33 @@ export function LancamentoModal({
     setPendingDeleteId(null)
   }
 
+  function startEdit(item: Transaction) {
+    const baseId = resolveBaseId(expandedTransactions, item.id)
+    const base = state.transactions.find((candidate) => candidate.id === baseId) ?? item
+    setEditingId(baseId)
+    setEditingYear(parseIsoDate(base.date)?.year ?? null)
+    setType(base.type)
+    setDate(base.date)
+    setDescription(base.description)
+    setCategory(base.category)
+    setAmount(centsToInput(base.amountCents))
+    setBoxId(base.boxId ?? state.boxes[0]?.id ?? '')
+    setRepeatMonthly(base.recurrenceDay !== undefined)
+    setAdjustToBusinessDay(base.adjustToBusinessDay === true)
+    setError(null)
+    setConfirmDelete(false)
+    setPendingDeleteId(null)
+    firstField.current?.focus()
+  }
+
   function deleteFromList(item: Transaction) {
     if (pendingDeleteId !== item.id) {
       setPendingDeleteId(item.id)
       return
     }
-    onDelete(item.id, false)
+    onDelete(resolveBaseId(expandedTransactions, item.id), false)
     setPendingDeleteId(null)
-    if (transaction?.id === item.id) onClose()
+    if (editingId === item.id) onClose()
   }
 
   return (
@@ -151,7 +213,7 @@ export function LancamentoModal({
         <header className="mb-4 flex items-start justify-between gap-3">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.16em] text-navy">
-              {transaction ? 'Editar lançamento' : 'Painel do dia'}
+              {editingId ? (repeatMonthly ? 'Editar série recorrente' : 'Editar lançamento') : 'Painel do dia'}
             </p>
             <h2 id="lancamento-title" className="money mt-1 text-xl font-extrabold text-slate-900">
               {state.year} · {date.slice(5).replace('-', '/')}
@@ -171,10 +233,10 @@ export function LancamentoModal({
           </div>
 
           <div className="mt-2 flex flex-wrap gap-1.5">
-            <span className="chip money bg-moss-soft text-moss-dark">Entradas {formatBRLCompact(dayIncome)}</span>
-            <span className="chip money bg-navy-soft text-navy">Saídas {formatBRLCompact(dayExpense)}</span>
+            <span className="chip money bg-[#EEF4F0] text-[#3A5743]">Entradas {formatBRLCompact(dayIncome)}</span>
+            <span className="chip money bg-[#FFF3EF] text-[#A64B39]">Saídas {formatBRLCompact(dayExpense)}</span>
             {(dayToBox > 0 || dayFromBox > 0) && (
-              <span className="chip money bg-white text-slate-500">
+              <span className="chip money bg-[#E9EFF5] text-[#1E3A5F]">
                 Caixinhas {formatBRLCompact(dayToBox)} guard. / {formatBRLCompact(dayFromBox)} resg.
               </span>
             )}
@@ -187,12 +249,13 @@ export function LancamentoModal({
               {dayTransactions.map((item) => {
                 const Icon = TYPE_ICONS[item.type]
                 const positive = item.type === 'entrada' || item.type === 'resgatar'
+                const style = TYPE_STYLES[item.type]
                 const box = item.boxId ? state.boxes.find((candidate) => candidate.id === item.boxId) : undefined
                 const pending = pendingDeleteId === item.id
 
                 return (
-                  <li key={item.id} className="flex items-center gap-3 py-2.5">
-                    <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${positive ? 'bg-moss-soft text-moss-dark' : 'bg-navy-soft text-navy'}`}>
+                  <li key={item.id} className={`flex items-center gap-2 py-2.5 ${editingId === item.id ? 'rounded-xl bg-[#E9EFF5] px-2' : ''}`}>
+                    <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${style.surface}`}>
                       <Icon size={16} />
                     </span>
                     <div className="min-w-0 flex-1">
@@ -202,19 +265,30 @@ export function LancamentoModal({
                         {box ? ` · ${box.name}` : ''}
                       </p>
                     </div>
-                    <span className={`money shrink-0 text-sm font-extrabold ${positive ? 'text-moss-dark' : 'text-navy'}`}>
+                    <span className={`money shrink-0 text-xs font-extrabold sm:text-sm ${style.text}`}>
                       {positive ? '+ ' : '− '}
                       {formatBRL(item.amountCents)}
                     </span>
                     <button
                       type="button"
+                      onClick={() => startEdit(item)}
+                      aria-label={`Editar ${item.description}`}
+                      aria-pressed={editingId === item.id}
+                      className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-white text-[#1E3A5F] ring-1 ring-slate-200 transition hover:bg-[#E9EFF5]"
+                    >
+                      <Pencil size={15} />
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => deleteFromList(item)}
                       aria-label={pending ? `Confirmar exclusão de ${item.description}` : `Excluir ${item.description}`}
-                      className={`grid h-8 min-w-8 shrink-0 place-items-center rounded-xl px-1 text-[10px] font-bold transition ${
-                        pending ? 'bg-navy text-white' : 'text-slate-400 hover:bg-white hover:text-navy'
+                      className={`inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-xl px-2.5 text-xs font-extrabold transition ${
+                        pending
+                          ? 'bg-[#0F2942] text-white shadow-md ring-2 ring-[#0F2942] ring-offset-2'
+                          : 'bg-white text-slate-500 ring-1 ring-slate-200 hover:bg-slate-50 hover:text-[#0F2942]'
                       }`}
                     >
-                      {pending ? 'Confirmar' : <Trash2 size={15} />}
+                      {pending ? <><Trash2 size={14} /> Confirmar</> : <Trash2 size={16} />}
                     </button>
                   </li>
                 )
@@ -222,7 +296,7 @@ export function LancamentoModal({
             </ul>
           )}
           <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
-            Cada exclusão recalcula o dia, o fechamento do mês e todos os saldos seguintes.
+            Cada exclusão recalcula o dia, os meses seguintes e toda a cascata de saldos.
           </p>
         </section>
 
@@ -233,6 +307,7 @@ export function LancamentoModal({
               {TRANSACTION_TYPES.map((option) => {
                 const Icon = TYPE_ICONS[option.value]
                 const active = type === option.value
+                const style = TYPE_STYLES[option.value]
                 return (
                   <button
                     key={option.value}
@@ -242,11 +317,7 @@ export function LancamentoModal({
                       setError(null)
                     }}
                     aria-pressed={active}
-                    className={`flex min-h-[54px] items-center gap-2 rounded-2xl border px-3 py-2.5 text-left text-[11px] font-bold transition ${
-                      active
-                        ? 'border-navy bg-navy-soft text-navy'
-                        : 'border-slate-200 text-slate-500 hover:border-slate-300'
-                    }`}
+                    className={`flex min-h-[54px] items-center gap-2 rounded-2xl border px-3 py-2.5 text-left text-[11px] font-bold transition ${active ? style.active : style.idle}`}
                   >
                     <Icon size={17} className="shrink-0" />
                     <span className="leading-tight">{option.label}</span>
@@ -265,8 +336,8 @@ export function LancamentoModal({
                 type="date"
                 className="field money"
                 value={date}
-                min={isoDate(state.year, 0, 1)}
-                max={isoDate(state.year, 11, 31)}
+                min={minDate}
+                max={maxDate}
                 onChange={(event) => {
                   setDate(event.target.value)
                   setPendingDeleteId(null)
@@ -289,6 +360,54 @@ export function LancamentoModal({
                 />
               </div>
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <label
+              className="flex cursor-pointer items-start gap-3 rounded-2xl border border-[#1E3A5F]/15 bg-[#E9EFF5]/60 p-3.5 transition hover:border-[#1E3A5F]/40"
+              htmlFor="lancamento-recorrencia"
+            >
+              <input
+                id="lancamento-recorrencia"
+                aria-label="Repetir todo mês no dia selecionado"
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 shrink-0 accent-[#1E3A5F]"
+                checked={repeatMonthly}
+                onChange={(event) => setRepeatMonthly(event.target.checked)}
+              />
+              <span>
+                <span className="block text-sm font-bold text-slate-800">Repetir todo mês no dia selecionado</span>
+                <span className="mt-0.5 block text-[11px] leading-relaxed text-slate-500">
+                  Aplica até dezembro do ano seguinte. Em meses curtos, usa o último dia válido (28/29/30).
+                  {adjustToBusinessDay ? ' Fins de semana são antecipados para sexta.' : ''}
+                </span>
+              </span>
+            </label>
+
+            <label
+              className="flex cursor-pointer items-start gap-3 rounded-2xl border border-[#1E3A5F]/15 bg-white p-3.5 transition hover:border-[#1E3A5F]/40"
+              htmlFor="lancamento-dia-util"
+            >
+              <input
+                id="lancamento-dia-util"
+                aria-label="Antecipar se cair em sábado ou domingo"
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 shrink-0 accent-[#1E3A5F]"
+                checked={adjustToBusinessDay}
+                onChange={(event) => setAdjustToBusinessDay(event.target.checked)}
+              />
+              <span>
+                <span className="block text-sm font-bold text-slate-800">Antecipar se cair em sábado ou domingo</span>
+                <span className="mt-0.5 block text-[11px] leading-relaxed text-slate-500">
+                  Sábado vira sexta; domingo vira sexta da semana anterior. Vale para o lançamento único e para a recorrência.
+                </span>
+                {adjustToBusinessDay && (
+                  <span className="money mt-1 block text-[11px] font-bold text-[#1E3A5F]">
+                    Data efetiva: {formatDate(effectiveDate)}
+                  </span>
+                )}
+              </span>
+            </label>
           </div>
 
           <div>
@@ -316,10 +435,23 @@ export function LancamentoModal({
               onChange={(event) => setCategory(event.target.value)}
             />
             <datalist id="categorias">
-              {[...new Set(['Alimentação', 'Casa', 'Transporte', 'Saúde', 'Lazer', 'Educação', 'Assinaturas', 'Outros', ...state.transactions.map((item) => item.category)])].map((item) => (
+              {[...new Set([...CATEGORIES.map((item) => item.name), ...state.transactions.map((item) => item.category)])].map((item) => (
                 <option key={item} value={item} />
               ))}
             </datalist>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <span
+                className="chip border border-slate-100 bg-white"
+                style={{ color: isTransfer ? CHART_COLORS.navy : categoryColor(category) }}
+              >
+                <i
+                  className="h-2 w-2 rounded-full"
+                  style={{ backgroundColor: isTransfer ? CHART_COLORS.navy : categoryColor(category) }}
+                />
+                {isTransfer ? 'Caixinhas' : category || 'Sem categoria'}
+              </span>
+              <span className="text-[11px] text-slate-400">Cor usada nos gráficos</span>
+            </div>
           </div>
 
           {isTransfer && (
@@ -339,7 +471,7 @@ export function LancamentoModal({
                 >
                   {state.boxes.map((box) => (
                     <option key={box.id} value={box.id}>
-                      {box.name} · {formatBRL(availableFor(state, date, box.id, transaction?.id).boxCents)}
+                      {box.name} · {formatBRL(availableFor(state, effectiveDate, box.id, editingId ?? undefined).boxCents)}
                     </option>
                   ))}
                 </select>
@@ -359,10 +491,10 @@ export function LancamentoModal({
           )}
 
           <div className="flex flex-col gap-2 pt-2 sm:flex-row-reverse">
-            <button type="submit" className="btn-primary w-full sm:w-auto">
-              {transaction ? 'Salvar alterações' : 'Adicionar ao dia'}
+            <button type="submit" className="btn-primary min-h-12 w-full sm:w-auto">
+              {editingId ? 'Salvar alterações' : 'Adicionar ao dia'}
             </button>
-            {transaction && (
+            {editingId && (
               <button
                 type="button"
                 onClick={() => {
@@ -370,16 +502,18 @@ export function LancamentoModal({
                     setConfirmDelete(true)
                     return
                   }
-                  onDelete(transaction.id, true)
+                  onDelete(editingId, true)
                 }}
-                className={`inline-flex w-full items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-bold transition sm:w-auto ${
-                  confirmDelete ? 'border-navy bg-navy text-white' : 'border-slate-200 text-slate-500 hover:text-navy'
+                className={`inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border-2 px-4 py-3 text-sm font-extrabold transition sm:w-auto ${
+                  confirmDelete
+                    ? 'border-[#0F2942] bg-[#0F2942] text-white shadow-lift'
+                    : 'border-slate-200 text-slate-600 hover:border-[#0F2942] hover:text-[#0F2942]'
                 }`}
               >
                 <Trash2 size={16} /> {confirmDelete ? 'Confirmar exclusão' : 'Excluir'}
               </button>
             )}
-            <button type="button" onClick={onClose} className="btn-soft w-full sm:w-auto">
+            <button type="button" onClick={onClose} className="btn-soft min-h-12 w-full sm:w-auto">
               Fechar
             </button>
           </div>

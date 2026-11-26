@@ -8,6 +8,9 @@ export interface Transaction {
   type: TransactionType
   amountCents: number
   boxId?: string
+  recurrenceDay?: number
+  adjustToBusinessDay?: boolean
+  sourceId?: string
 }
 
 export interface Box {

@@ -46,7 +46,7 @@ export function Dados({
       return
     }
     if (!parsedBalance && !zero) {
-      setError('Informe um saldo inicial válido. Use 0 para começar do zero.')
+      setError('Informe um saldo base válido. Use 0 para começar do zero.')
       return
     }
 
@@ -65,7 +65,9 @@ export function Dados({
       <div className="grid gap-3 lg:grid-cols-2">
         <article className="card">
           <div className="mb-4 flex items-center gap-2">
-            <Database size={17} className="text-navy" />
+            <span className="grid h-9 w-9 place-items-center rounded-xl bg-[#E9EFF5] text-[#1E3A5F]">
+              <Database size={17} />
+            </span>
             <h3 className="text-[15px] font-bold text-slate-900">Configurações do ano</h3>
           </div>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -75,7 +77,7 @@ export function Dados({
                 <input id="config-ano" type="number" className="field money" min={1900} max={2200} value={year} onChange={(event) => setYear(event.target.value)} />
               </div>
               <div>
-                <label className="label" htmlFor="config-saldo">Saldo livre em 01/jan (R$)</label>
+                <label className="label" htmlFor="config-saldo">Saldo base do 1º ano (R$)</label>
                 <div className="relative">
                   <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">R$</span>
                   <input id="config-saldo" className="field money !pl-11" inputMode="decimal" value={balance} onChange={(event) => setBalance(event.target.value)} />
@@ -86,24 +88,26 @@ export function Dados({
             <button type="submit" className="btn-primary w-full sm:w-auto">Salvar configurações</button>
           </form>
           <p className="mt-4 text-xs leading-relaxed text-slate-400">
-            O saldo inicial é o ponto de partida do saldo livre. Transferências para caixinhas reduzem esse saldo, mas não contam como saída.
+            Esse saldo é o ponto de partida do 1º ano. A cada virada de dezembro para janeiro, o fechamento do ano anterior vira a abertura do ano seguinte, inclusive nas caixinhas.
           </p>
         </article>
 
         <article className="card">
           <div className="mb-4 flex items-center gap-2">
-            <Download size={17} className="text-moss-dark" />
+            <span className="grid h-9 w-9 place-items-center rounded-xl bg-[#EEF4F0] text-[#3A5743]">
+              <Download size={17} />
+            </span>
             <h3 className="text-[15px] font-bold text-slate-900">Exportar</h3>
           </div>
           <div className="space-y-2">
-            <button type="button" className="btn-soft w-full justify-start" onClick={onExportJson}>
-              <FileJson size={16} className="text-navy" /> JSON completo (caixinhas + lançamentos)
+            <button type="button" className="btn-soft w-full justify-start hover:border-[#1E3A5F]" onClick={onExportJson}>
+              <FileJson size={16} className="text-[#1E3A5F]" /> JSON completo (caixinhas + lançamentos)
             </button>
-            <button type="button" className="btn-soft w-full justify-start" onClick={onExportTransactionsCsv}>
-              <FileSpreadsheet size={16} className="text-moss-dark" /> CSV de lançamentos do ano
+            <button type="button" className="btn-soft w-full justify-start hover:border-[#3A5743]" onClick={onExportTransactionsCsv}>
+              <FileSpreadsheet size={16} className="text-[#3A5743]" /> CSV de lançamentos do ano
             </button>
-            <button type="button" className="btn-soft w-full justify-start" onClick={onExportBoxesCsv}>
-              <FileSpreadsheet size={16} className="text-indigo-500" /> CSV de caixinhas
+            <button type="button" className="btn-soft w-full justify-start hover:border-[#1E3A5F]" onClick={onExportBoxesCsv}>
+              <FileSpreadsheet size={16} className="text-[#1E3A5F]" /> CSV de caixinhas
             </button>
           </div>
           <p className="mt-4 text-xs leading-relaxed text-slate-400">
@@ -113,7 +117,9 @@ export function Dados({
 
         <article className="card">
           <div className="mb-4 flex items-center gap-2">
-            <Upload size={17} className="text-indigo-500" />
+            <span className="grid h-9 w-9 place-items-center rounded-xl bg-[#E9EFF5] text-[#1E3A5F]">
+              <Upload size={17} />
+            </span>
             <h3 className="text-[15px] font-bold text-slate-900">Importar</h3>
           </div>
           <input
@@ -139,11 +145,11 @@ export function Dados({
             }}
           />
           <div className="space-y-2">
-            <button type="button" className="btn-soft w-full justify-start" onClick={() => jsonInput.current?.click()}>
-              <FileJson size={16} className="text-navy" /> JSON (substitui todos os dados)
+            <button type="button" className="btn-soft w-full justify-start hover:border-[#1E3A5F]" onClick={() => jsonInput.current?.click()}>
+              <FileJson size={16} className="text-[#1E3A5F]" /> JSON (substitui todos os dados)
             </button>
-            <button type="button" className="btn-soft w-full justify-start" onClick={() => csvInput.current?.click()}>
-              <FileSpreadsheet size={16} className="text-moss-dark" /> CSV (substitui lançamentos do ano)
+            <button type="button" className="btn-soft w-full justify-start hover:border-[#3A5743]" onClick={() => csvInput.current?.click()}>
+              <FileSpreadsheet size={16} className="text-[#3A5743]" /> CSV (substitui lançamentos do ano)
             </button>
           </div>
           <p className="mt-4 text-xs leading-relaxed text-slate-400">
@@ -153,7 +159,9 @@ export function Dados({
 
         <article className="card">
           <div className="mb-4 flex items-center gap-2">
-            <RotateCcw size={17} className="text-slate-500" />
+            <span className="grid h-9 w-9 place-items-center rounded-xl bg-[#FFF3EF] text-[#A64B39]">
+              <RotateCcw size={17} />
+            </span>
             <h3 className="text-[15px] font-bold text-slate-900">Recomeçar</h3>
           </div>
           <p className="text-sm text-slate-500">Apaga caixinhas e lançamentos deste dispositivo e volta ao ano atual.</p>
@@ -167,8 +175,10 @@ export function Dados({
               onReset()
               setConfirmReset(false)
             }}
-            className={`mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-bold transition sm:w-auto ${
-              confirmReset ? 'border-navy bg-navy text-white' : 'border-slate-200 text-slate-500 hover:text-navy'
+            className={`mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border-2 px-4 py-3 text-sm font-extrabold transition sm:w-auto ${
+              confirmReset
+                ? 'border-[#C0604D] bg-[#C0604D] text-white shadow-md ring-2 ring-[#C0604D] ring-offset-2'
+                : 'border-slate-200 text-slate-600 hover:border-[#C0604D] hover:text-[#A64B39]'
             }`}
           >
             <RotateCcw size={16} /> {confirmReset ? 'Confirmar limpeza' : 'Limpar todos os dados'}

@@ -1,13 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import {
-  BarChart3,
-  CalendarRange,
-  ChevronLeft,
-  ChevronRight,
-  Database,
-  PiggyBank,
-  Waves,
-} from 'lucide-react'
+import { BarChart3, CalendarRange, ChevronLeft, ChevronRight, Database, PiggyBank } from 'lucide-react'
 import { Caixinhas } from './components/Caixinhas'
 import { CaixinhaModal } from './components/CaixinhaModal'
 import { Dados } from './components/Dados'
@@ -98,16 +90,21 @@ export default function App() {
         ? previous.transactions.map((item) => (item.id === transaction.id ? transaction : item))
         : [...previous.transactions, transaction],
     }))
-    setToast('Lançamento salvo. Saldos recalculados em cascata.')
+    setToast(
+      transaction.recurrenceDay
+        ? 'Série recorrente salva. Meses seguintes recalculados.'
+        : 'Lançamento salvo. Saldos recalculados em cascata.',
+    )
   }
 
   function deleteTransaction(id: string, closeAfter = false) {
+    const recurring = state.transactions.some((item) => item.id === id && item.recurrenceDay !== undefined)
     setState((previous) => ({
       ...previous,
       transactions: previous.transactions.filter((item) => item.id !== id),
     }))
     if (closeAfter) setDraft(null)
-    setToast('Lançamento excluído. Saldos recalculados.')
+    setToast(recurring ? 'Série recorrente excluída. Saldos recalculados.' : 'Lançamento excluído. Saldos recalculados.')
   }
 
   function saveBox(box: Box) {
@@ -173,12 +170,12 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
+    <div className="min-h-screen bg-white text-slate-900">
       <header className="sticky top-0 z-20 border-b border-slate-100 bg-white/85 backdrop-blur-xl">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3.5">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-navy text-white shadow-lift">
-              <Waves size={20} strokeWidth={2.4} />
+            <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-navy shadow-lift">
+              <WaveMark />
             </div>
             <div className="min-w-0">
               <h1 className="truncate text-lg font-extrabold leading-tight tracking-tight">Fluxo</h1>
@@ -337,5 +334,26 @@ export default function App() {
         </div>
       )}
     </div>
+  )
+}
+
+function WaveMark() {
+  return (
+    <svg viewBox="0 0 32 32" className="h-6 w-6" aria-hidden="true">
+      <path
+        d="M3 11c3.5-4 7-4 10.5 0s7 4 10.5 0c1.4-1.6 2.9-2.7 5-3"
+        fill="none"
+        stroke="#FFFFFF"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M3 20c3.5-4 7-4 10.5 0s7 4 10.5 0c1.4-1.6 2.9-2.7 5-3"
+        fill="none"
+        stroke="#4A6B53"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+      />
+    </svg>
   )
 }
