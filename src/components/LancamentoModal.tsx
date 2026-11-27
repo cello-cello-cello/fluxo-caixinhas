@@ -153,6 +153,15 @@ export function LancamentoModal({
       type,
       amountCents,
       boxId: isTransfer ? boxId : undefined,
+      ...(type === 'saida' && transaction?.cardId
+        ? {
+            cardId: transaction.cardId,
+            installmentGroupId: transaction.installmentGroupId,
+            installmentIndex: transaction.installmentIndex,
+            installmentCount: transaction.installmentCount,
+            invoiceMonth: transaction.invoiceMonth,
+          }
+        : {}),
       recurrenceDay: repeatMonthly ? parsedDate.day : undefined,
       adjustToBusinessDay,
     })

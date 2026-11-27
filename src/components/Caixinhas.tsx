@@ -1,21 +1,25 @@
-import { ArrowDownToLine, ArrowUpFromLine, CalendarDays, Pencil, PiggyBank, Sparkles } from 'lucide-react'
+import { ArrowDownToLine, ArrowUpFromLine, CalendarDays, Pencil, PiggyBank, Sparkles, Target } from 'lucide-react'
 import { Ring } from './Ring'
-import { projectedBoxValue } from '../lib/boxes'
+import { findBestDepositDay, planBoxGoal, projectedBoxValue } from '../lib/boxes'
+import type { BoxGoalPlan } from '../lib/boxes'
 import { formatDate } from '../lib/dates'
 import { formatBRL, formatPercent } from '../lib/money'
-import type { AppState, Box, Position, TransactionType } from '../types'
+import type { AppState, Box, MonthFlow, Position, TransactionType } from '../types'
 
 interface CaixinhasProps {
   state: AppState
   position: Position
+  monthFlow: MonthFlow
   onAdd: () => void
   onEdit: (box: Box) => void
   onDelete: (id: string) => void
   onTransfer: (type: Extract<TransactionType, 'guardar' | 'resgatar'>, boxId: string) => void
 }
 
-export function Caixinhas({ state, position, onAdd, onEdit, onDelete, onTransfer }: CaixinhasProps) {
+export function Caixinhas({ state, position, monthFlow, onAdd, onEdit, onDelete, onTransfer }: CaixinhasProps) {
   const cards = position.netWorthCents > 0 ? position.totalBoxCents / position.netWorthCents : 0
+  const dailyFreeBalances = Object.fromEntries(monthFlow.days.map((day) => [day.day, day.balanceCents]))
+  const daysInCurrentMonth = monthFlow.days.length
 
   return (
     <section>
@@ -65,6 +69,10 @@ export function Caixinhas({ state, position, onAdd, onEdit, onDelete, onTransfer
             const progress = box.goalCents > 0 ? balance / box.goalCents : 0
             const projection = projectedBoxValue(balance, box.yieldRate, box.targetDate)
             const gain = projection - balance
+            const plan = planBoxGoal(box, balance)
+            const suggestion = plan && !plan.achieved
+              ? findBestDepositDay(plan.monthlyContributionCents, dailyFreeBalances, daysInCurrentMonth)
+              : null
 
             return (
               <article key={box.id} className="card relative overflow-hidden pt-6">
@@ -113,6 +121,50 @@ export function Caixinhas({ state, position, onAdd, onEdit, onDelete, onTransfer
                   )}
                 </div>
 
+                {plan && (
+                  <div className="mt-3 rounded-2xl bg-slate-50 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                        <Target size={13} /> Planejamento da meta
+                      </p>
+                      <span
+                        className={`chip ${
+                          plan.achieved
+                            ? 'bg-moss-soft text-moss-dark'
+                            : plan.overdue
+                              ? 'bg-rose-50 text-rose-700'
+                              : 'bg-navy-soft text-navy'
+                        }`}
+                      >
+                        {plan.achieved ? 'Meta atingida' : plan.overdue ? 'Prazo vencido' : 'Em andamento'}
+                      </span>
+                    </div>
+                    {!plan.achieved && (
+                      <>
+                        <p className="money mt-2 text-lg font-extrabold text-navy">
+                          {formatBRL(plan.monthlyContributionCents)}
+                          <span className="text-xs font-bold text-slate-400">{contributionPeriodLabel(plan)}</span>
+                        </p>
+                        <p className="mt-0.5 text-[11px] text-slate-500">
+                          {goalDeadlineLabel(plan)} · {formatBRL(plan.remainingCents)} restantes
+                        </p>
+                      </>
+                    )}
+                    {suggestion && suggestion.recommendedDay !== null && (
+                      <div className="mt-2 border-t border-slate-200 pt-2 text-[11px]">
+                        <p className="font-bold text-moss-dark">
+                          <CalendarDays size={12} className="mr-1 inline align-[-2px]" />
+                          Melhor dia: {suggestion.recommendedDay}
+                        </p>
+                        <p className="mt-1 leading-relaxed text-slate-500">{suggestion.reason}</p>
+                        {suggestion.hasNegativeRisk && (
+                          <p className="mt-1 font-bold text-rose-700">O aporte compromete o caixa livre no período.</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="mt-4 grid grid-cols-3 gap-2">
                   <button type="button" className="btn-soft !px-2 text-[11px]" onClick={() => onTransfer('guardar', box.id)}>
                     <ArrowDownToLine size={14} /> Guardar
@@ -137,3 +189,17 @@ export function Caixinhas({ state, position, onAdd, onEdit, onDelete, onTransfer
     </section>
   )
 }
+
+function contributionPeriodLabel(plan: BoxGoalPlan): string {
+  if (!plan.hasTargetDate) return ' em uma vez'
+  if (plan.monthsRemaining === 0) return ' neste mês'
+  return '/mês'
+}
+
+function goalDeadlineLabel(plan: BoxGoalPlan): string {
+  if (!plan.hasTargetDate) return 'sem prazo definido'
+  if (plan.overdue) return 'prazo vencido'
+  if (plan.monthsRemaining === 0) return 'mês atual'
+  return `${plan.monthsRemaining} ${plan.monthsRemaining === 1 ? 'mês' : 'meses'} restantes`
+}
+

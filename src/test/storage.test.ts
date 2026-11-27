@@ -150,6 +150,28 @@ describe('importação e validação', () => {
     expect(imported?.transactions[0].adjustToBusinessDay).toBe(true)
   })
 
+  it('preserva cartões e metadados de parcelas na sanitização', () => {
+    const state = createInitialState(2026)
+    state.cards = [{ id: 'c1', name: 'Cartão', limitCents: 100_000, closingDay: 10, dueDay: 15 }]
+    state.transactions = [
+      {
+        id: 'netflix:0:2',
+        date: '2026-11-13',
+        description: 'NETFLIX (2/6)',
+        category: 'Cartão',
+        type: 'saida',
+        amountCents: 3_990,
+        cardId: 'c1',
+        installmentGroupId: 'c1:netflix',
+        installmentIndex: 2,
+        installmentCount: 6,
+        invoiceMonth: '2026-11',
+      },
+    ]
+
+    expect(parseJsonImport(JSON.stringify(state))).toEqual(state)
+  })
+
   it('exporta a data já antecipada para o dia útil anterior', () => {
     const state = createInitialState(2026)
     state.transactions = [

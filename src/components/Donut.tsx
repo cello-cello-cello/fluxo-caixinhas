@@ -13,9 +13,10 @@ interface DonutProps {
   title: string
   subtitle?: string
   control?: ReactNode
+  fullTotal?: boolean
 }
 
-export function Donut({ segments, title, subtitle, control }: DonutProps) {
+export function Donut({ segments, title, subtitle, control, fullTotal = false }: DonutProps) {
   const size = 176
   const stroke = 22
   const radius = (size - stroke) / 2
@@ -66,7 +67,9 @@ export function Donut({ segments, title, subtitle, control }: DonutProps) {
           <div className="absolute inset-0 grid place-items-center text-center">
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Total</p>
-              <p className="money mt-1 text-lg font-extrabold text-[#0F2942]">{formatBRLCompact(total)}</p>
+              <p className="money mt-1 text-lg font-extrabold text-[#0F2942]">
+                {fullTotal ? formatBRL(total) : formatBRLCompact(total)}
+              </p>
             </div>
           </div>
         </div>

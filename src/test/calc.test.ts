@@ -153,6 +153,29 @@ describe('fluxo de caixa encadeado', () => {
     expect(available).toEqual({ freeCents: 83_000, boxCents: 22_000 })
   })
 
+  it('calcula a posição no fechamento do mês com saldo vindo do ano anterior', () => {
+    const state = createInitialState(2027)
+    state.initialBalanceCents = 100_000
+    state.boxes = [{ id: 'b1', name: 'Viagem', color: '#4A6B53', balanceCents: 0, goalCents: 50_000 }]
+    state.transactions = [
+      transaction({ id: 'fechamento', date: '2026-12-31', type: 'saida', amountCents: 1_000 }),
+      transaction({ id: 'salario', date: '2027-01-10', type: 'entrada', amountCents: 500 }),
+      transaction({ id: 'guardar', date: '2027-02-10', type: 'guardar', amountCents: 2_000, boxId: 'b1' }),
+    ]
+
+    const january = calculatePosition(state, '2027-01-31')
+    const february = calculatePosition(state, '2027-02-28')
+    const december = calculatePosition(state, '2027-12-31')
+
+    expect(january.freeBalanceCents).toBe(99_500)
+    expect(january.totalBoxCents).toBe(0)
+    expect(february.freeBalanceCents).toBe(97_500)
+    expect(february.totalBoxCents).toBe(2_000)
+    expect(february.netWorthCents).toBe(99_500)
+    expect(december.freeBalanceCents).toBe(97_500)
+    expect(december.totalBoxCents).toBe(2_000)
+  })
+
   it('repete um lançamento mensalmente e ajusta meses curtos', () => {
     const state = createInitialState(2026)
     state.initialBalanceCents = 100_000

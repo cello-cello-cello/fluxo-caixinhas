@@ -1,7 +1,7 @@
 import { carryIn, expandTransactions } from './calc'
 import { BOX_COLORS } from './constants'
 import { isValidIsoDate } from './dates'
-import type { AppState, Box, Transaction, TransactionType } from '../types'
+import type { AppState, Box, CreditCard, Transaction, TransactionType } from '../types'
 
 const STORAGE_KEY = 'fluxo-caixinhas:v1'
 const VALID_TYPES: TransactionType[] = ['entrada', 'saida', 'guardar', 'resgatar']
@@ -12,7 +12,7 @@ export function createId(): string {
 }
 
 export function createInitialState(year = new Date().getFullYear()): AppState {
-  return { version: 1, year, initialBalanceCents: 0, boxes: [], transactions: [] }
+  return { version: 1, year, initialBalanceCents: 0, boxes: [], cards: [], transactions: [] }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -49,7 +49,23 @@ function sanitizeBox(value: unknown): Box | null {
   }
 }
 
-function sanitizeTransaction(value: unknown, boxIds: Set<string>): Transaction | null {
+function sanitizeCard(value: unknown): CreditCard | null {
+  if (!isRecord(value)) return null
+  const name = typeof value.name === 'string' ? value.name.trim().slice(0, 80) : ''
+  if (!name) return null
+
+  const day = (value: unknown) => Math.min(31, Math.max(1, toInteger(value, 1)))
+
+  return {
+    id: typeof value.id === 'string' && value.id ? value.id : createId(),
+    name,
+    limitCents: Math.max(0, toInteger(value.limitCents)),
+    closingDay: day(value.closingDay),
+    dueDay: day(value.dueDay),
+  }
+}
+
+function sanitizeTransaction(value: unknown, boxIds: Set<string>, cardIds: Set<string>): Transaction | null {
   if (!isRecord(value)) return null
   if (!isValidIsoDate(value.date)) return null
 
@@ -63,6 +79,15 @@ function sanitizeTransaction(value: unknown, boxIds: Set<string>): Transaction |
   const rawCategory = typeof value.category === 'string' && value.category.trim() ? value.category.trim() : 'Outros'
   const category = rawCategory === 'Casa' ? 'Moradia' : rawCategory
   const boxId = typeof value.boxId === 'string' && boxIds.has(value.boxId) ? value.boxId : undefined
+  const cardId = typeof value.cardId === 'string' && cardIds.has(value.cardId) ? value.cardId : undefined
+  const installmentGroupId = typeof value.installmentGroupId === 'string' && value.installmentGroupId
+    ? value.installmentGroupId
+    : undefined
+  const installmentIndexValue = toInteger(value.installmentIndex)
+  const installmentCountValue = toInteger(value.installmentCount)
+  const invoiceMonth = typeof value.invoiceMonth === 'string' && /^\d{4}-\d{2}$/.test(value.invoiceMonth)
+    ? value.invoiceMonth
+    : undefined
   const recurrenceValue = toInteger(value.recurrenceDay)
   const recurrenceDay = recurrenceValue > 0 ? Math.min(31, recurrenceValue) : undefined
   const adjustToBusinessDay = value.adjustToBusinessDay === true ? true : undefined
@@ -77,6 +102,11 @@ function sanitizeTransaction(value: unknown, boxIds: Set<string>): Transaction |
     type,
     amountCents,
     boxId,
+    cardId,
+    installmentGroupId,
+    installmentIndex: installmentIndexValue > 0 ? installmentIndexValue : undefined,
+    installmentCount: installmentCountValue > 0 ? installmentCountValue : undefined,
+    invoiceMonth,
     recurrenceDay,
     adjustToBusinessDay,
   }
@@ -90,9 +120,13 @@ export function sanitizeState(value: unknown): AppState | null {
     ? value.boxes.map(sanitizeBox).filter((box): box is Box => box !== null)
     : []
   const boxIds = new Set(boxes.map((box) => box.id))
+  const cards = Array.isArray(value.cards)
+    ? value.cards.map(sanitizeCard).filter((card): card is CreditCard => card !== null)
+    : []
+  const cardIds = new Set(cards.map((card) => card.id))
   const transactions = Array.isArray(value.transactions)
     ? value.transactions
-        .map((item) => sanitizeTransaction(item, boxIds))
+        .map((item) => sanitizeTransaction(item, boxIds, cardIds))
         .filter((item): item is Transaction => item !== null)
     : []
 
@@ -101,6 +135,7 @@ export function sanitizeState(value: unknown): AppState | null {
     year: Math.min(2200, Math.max(1900, year)),
     initialBalanceCents: toInteger(value.initialBalanceCents),
     boxes,
+    cards,
     transactions,
   }
 }

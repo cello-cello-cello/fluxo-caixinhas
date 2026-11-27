@@ -8,9 +8,22 @@ export interface Transaction {
   type: TransactionType
   amountCents: number
   boxId?: string
+  cardId?: string
+  installmentGroupId?: string
+  installmentIndex?: number
+  installmentCount?: number
+  invoiceMonth?: string
   recurrenceDay?: number
   adjustToBusinessDay?: boolean
   sourceId?: string
+}
+
+export interface CreditCard {
+  id: string
+  name: string
+  limitCents: number
+  closingDay: number
+  dueDay: number
 }
 
 export interface Box {
@@ -28,6 +41,7 @@ export interface AppState {
   year: number
   initialBalanceCents: number
   boxes: Box[]
+  cards: CreditCard[]
   transactions: Transaction[]
 }
 

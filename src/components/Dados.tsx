@@ -101,7 +101,7 @@ export function Dados({
           </div>
           <div className="space-y-2">
             <button type="button" className="btn-soft w-full justify-start hover:border-[#1E3A5F]" onClick={onExportJson}>
-              <FileJson size={16} className="text-[#1E3A5F]" /> JSON completo (caixinhas + lançamentos)
+              <FileJson size={16} className="text-[#1E3A5F]" /> JSON completo (caixinhas, cartões e lançamentos)
             </button>
             <button type="button" className="btn-soft w-full justify-start hover:border-[#3A5743]" onClick={onExportTransactionsCsv}>
               <FileSpreadsheet size={16} className="text-[#3A5743]" /> CSV de lançamentos do ano
@@ -164,7 +164,7 @@ export function Dados({
             </span>
             <h3 className="text-[15px] font-bold text-slate-900">Recomeçar</h3>
           </div>
-          <p className="text-sm text-slate-500">Apaga caixinhas e lançamentos deste dispositivo e volta ao ano atual.</p>
+          <p className="text-sm text-slate-500">Apaga caixinhas, cartões e lançamentos deste dispositivo e volta ao ano atual.</p>
           <button
             type="button"
             onClick={() => {

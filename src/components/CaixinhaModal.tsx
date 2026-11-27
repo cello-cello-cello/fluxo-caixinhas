@@ -132,8 +132,9 @@ export function CaixinhaModal({ box, onClose, onSave, onDelete }: CaixinhaModalP
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label className="label" htmlFor="caixinha-data">Data alvo (opcional)</label>
+              <label className="label" htmlFor="caixinha-data">Data alvo: mês/ano ou dia (opcional)</label>
               <input id="caixinha-data" type="date" className="field money" value={targetDate} onChange={(event) => setTargetDate(event.target.value)} />
+              <p className="mt-1 text-[11px] text-slate-400">Use o dia 1 para definir apenas o mês e o ano.</p>
             </div>
             <div>
               <label className="label" htmlFor="caixinha-rendimento">Rendimento (opcional)</label>

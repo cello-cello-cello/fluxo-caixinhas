@@ -1,15 +1,14 @@
 import { useMemo, useState } from 'react'
 import { Donut } from './Donut'
-import { expandTransactions } from '../lib/calc'
+import { calculatePosition, expandTransactions } from '../lib/calc'
 import { categoryColor, CHART_COLORS } from '../lib/constants'
-import { MONTH_NAMES, MONTH_SHORT } from '../lib/dates'
+import { daysInMonth, isoDate, MONTH_NAMES, MONTH_SHORT } from '../lib/dates'
 import { formatBRL } from '../lib/money'
-import type { AnnualFlow, AppState, Position } from '../types'
+import type { AnnualFlow, AppState } from '../types'
 
 interface GraficosProps {
   state: AppState
   flow: AnnualFlow
-  position: Position
 }
 
 type Period = 'mes' | 'anual'
@@ -24,7 +23,7 @@ function defaultMonth(year: number, dates: string[]): number {
   return fallback
 }
 
-export function Graficos({ state, flow, position }: GraficosProps) {
+export function Graficos({ state, flow }: GraficosProps) {
   const [period, setPeriod] = useState<Period>('mes')
   const expandedTransactions = useMemo(() => expandTransactions(state.transactions), [state.transactions])
   const categoryTransactions = useMemo(
@@ -39,7 +38,7 @@ export function Graficos({ state, flow, position }: GraficosProps) {
   const [month, setMonth] = useState(() =>
     defaultMonth(
       state.year,
-      categoryTransactions.map((transaction) => transaction.date),
+      expandedTransactions.map((transaction) => transaction.date),
     ),
   )
 
@@ -90,9 +89,16 @@ export function Graficos({ state, flow, position }: GraficosProps) {
     </div>
   )
 
+  const wealthMonth = period === 'anual' ? 11 : month
+  const wealthDate = isoDate(state.year, wealthMonth, daysInMonth(state.year, wealthMonth))
+  const wealthPosition = useMemo(() => calculatePosition(state, wealthDate), [state, wealthDate])
+  const wealthSubtitle =
+    period === 'anual'
+      ? `Posição consolidada ao final de ${state.year}`
+      : `Posição ao final de ${MONTH_NAMES[month]} de ${state.year}`
   const wealthSegments = [
-    { label: 'Saldo livre', value: position.freeBalanceCents, color: CHART_COLORS.navy },
-    { label: 'Caixinhas', value: position.totalBoxCents, color: CHART_COLORS.moss },
+    { label: 'Saldo livre', value: wealthPosition.freeBalanceCents, color: CHART_COLORS.navy },
+    { label: 'Caixinhas', value: wealthPosition.totalBoxCents, color: CHART_COLORS.moss },
   ]
 
   const maxMonthly = Math.max(
@@ -112,7 +118,9 @@ export function Graficos({ state, flow, position }: GraficosProps) {
         <Donut
           segments={wealthSegments}
           title="Livre × caixinhas"
-          subtitle="Patrimônio disponível neste momento"
+          subtitle={wealthSubtitle}
+          control={periodControl}
+          fullTotal
         />
         <Donut
           segments={categorySegments}

@@ -1,16 +1,24 @@
 import { useEffect, useMemo, useState } from 'react'
-import { BarChart3, CalendarRange, ChevronLeft, ChevronRight, Database, PiggyBank } from 'lucide-react'
+import { BarChart3, CalendarRange, ChevronLeft, ChevronRight, CreditCard as CreditCardIcon, Database, PiggyBank } from 'lucide-react'
 import { Caixinhas } from './components/Caixinhas'
 import { CaixinhaModal } from './components/CaixinhaModal'
+import { CartaoModal } from './components/CartaoModal'
+import { Cartoes } from './components/Cartoes'
 import { Dados } from './components/Dados'
+import { FaturaImportModal } from './components/FaturaImportModal'
 import { FluxoAnual } from './components/FluxoAnual'
 import type { ViewMode } from './components/FluxoAnual'
 import { Graficos } from './components/Graficos'
 import { LancamentoModal } from './components/LancamentoModal'
+import { SenhaPdfModal } from './components/SenhaPdfModal'
 import { SummaryCards } from './components/SummaryCards'
 import { calculateAnnualFlow, getCurrentPosition } from './lib/calc'
 import { isoDate, todayIso } from './lib/dates'
+import { buildInstallmentTransactions, parseInvoiceDocument } from './lib/invoices'
+import type { InstallmentFilter, InvoiceItemDraft, InvoiceParseResult } from './lib/invoices'
+import { pdfPasswordIssue } from './lib/pdfPassword'
 import {
+  createId,
   createInitialState,
   downloadTextFile,
   exportBoxesCsv,
@@ -21,9 +29,9 @@ import {
   parseTransactionsCsv,
   saveState,
 } from './lib/storage'
-import type { AppState, Box, Transaction, TransactionType } from './types'
+import type { AppState, Box, CreditCard, Transaction, TransactionType } from './types'
 
-type Tab = 'fluxo' | 'caixinhas' | 'graficos' | 'dados'
+type Tab = 'fluxo' | 'caixinhas' | 'cartoes' | 'graficos' | 'dados'
 
 interface LaunchDraft {
   date: string
@@ -32,9 +40,24 @@ interface LaunchDraft {
   presetBoxId?: string
 }
 
+interface InvoiceDraft {
+  card: CreditCard
+  invoiceMonth: string
+  items: InvoiceItemDraft[]
+  rawText: string
+  sections: string[]
+}
+
+interface PasswordDraft {
+  card: CreditCard
+  file: File
+  invoiceMonth: string
+}
+
 const TABS: { id: Tab; label: string; icon: typeof CalendarRange }[] = [
   { id: 'fluxo', label: 'Fluxo', icon: CalendarRange },
   { id: 'caixinhas', label: 'Caixinhas', icon: PiggyBank },
+  { id: 'cartoes', label: 'Cartões', icon: CreditCardIcon },
   { id: 'graficos', label: 'Gráficos', icon: BarChart3 },
   { id: 'dados', label: 'Dados', icon: Database },
 ]
@@ -46,6 +69,9 @@ export default function App() {
   const [focusedMonth, setFocusedMonth] = useState(() => new Date().getMonth())
   const [draft, setDraft] = useState<LaunchDraft | null>(null)
   const [boxDraft, setBoxDraft] = useState<{ box?: Box } | null>(null)
+  const [cardDraft, setCardDraft] = useState<{ card?: CreditCard } | null>(null)
+  const [invoiceDraft, setInvoiceDraft] = useState<InvoiceDraft | null>(null)
+  const [passwordDraft, setPasswordDraft] = useState<PasswordDraft | null>(null)
   const [toast, setToast] = useState<string | null>(null)
 
   useEffect(() => saveState(state), [state])
@@ -57,15 +83,18 @@ export default function App() {
   }, [toast])
 
   useEffect(() => {
-    if (!draft && !boxDraft) return
+    if (!draft && !boxDraft && !cardDraft && !invoiceDraft && !passwordDraft) return
     document.body.style.overflow = 'hidden'
     return () => {
       document.body.style.overflow = ''
     }
-  }, [draft, boxDraft])
+  }, [draft, boxDraft, cardDraft, invoiceDraft, passwordDraft])
 
   const flow = useMemo(() => calculateAnnualFlow(state, state.year), [state])
   const position = useMemo(() => getCurrentPosition(state), [state])
+  const currentYear = new Date().getFullYear()
+  const currentMonth = new Date().getMonth()
+  const planningFlow = useMemo(() => calculateAnnualFlow(state, currentYear), [state, currentYear])
 
   function changeYear(delta: number) {
     setState((previous) => ({ ...previous, year: previous.year + delta }))
@@ -129,6 +158,102 @@ export default function App() {
     setToast('Caixinha excluída.')
   }
 
+  function saveCard(card: CreditCard) {
+    setState((previous) => ({
+      ...previous,
+      cards: previous.cards.some((item) => item.id === card.id)
+        ? previous.cards.map((item) => (item.id === card.id ? card : item))
+        : [...previous.cards, card],
+    }))
+    setCardDraft(null)
+    setToast('Cartão salvo.')
+  }
+
+  function deleteCard(id: string) {
+    setState((previous) => ({
+      ...previous,
+      cards: previous.cards.filter((card) => card.id !== id),
+      transactions: previous.transactions.filter((transaction) => transaction.cardId !== id),
+    }))
+    setCardDraft(null)
+    setToast('Cartão excluído e parcelas removidas.')
+  }
+
+  function openInvoice(card: CreditCard, invoiceMonth: string, parsed: InvoiceParseResult) {
+    setInvoiceDraft({
+      card,
+      invoiceMonth,
+      items: parsed.items,
+      rawText: parsed.rawText,
+      sections: parsed.sections,
+    })
+    setToast(
+      parsed.items.length > 0
+        ? `${parsed.items.length} lançamento(s) identificado(s). Confira antes de salvar.`
+        : 'Nenhum lançamento identificado. Adicione manualmente na conferência.',
+    )
+  }
+
+  async function importInvoicePdf(card: CreditCard, file: File, invoiceMonth: string) {
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
+      setToast('Selecione um arquivo PDF.')
+      return
+    }
+
+    try {
+      const { readPdfInvoiceLines } = await import('./lib/pdfInvoice')
+      const lines = await readPdfInvoiceLines(file)
+      openInvoice(card, invoiceMonth, parseInvoiceDocument(lines, invoiceMonth))
+    } catch (error) {
+      if (pdfPasswordIssue(error) === 'need_password') {
+        setPasswordDraft({ card, file, invoiceMonth })
+        return
+      }
+      setToast('Não foi possível ler o PDF da fatura.')
+    }
+  }
+
+  function unlockInvoice(parsed: InvoiceParseResult) {
+    if (!passwordDraft) return
+    openInvoice(passwordDraft.card, passwordDraft.invoiceMonth, parsed)
+    setPasswordDraft(null)
+  }
+
+  function openManualInvoice(card: CreditCard) {
+    const invoiceMonth = todayIso().slice(0, 7)
+    setInvoiceDraft({
+      card,
+      invoiceMonth,
+      items: [{
+        id: createId(),
+        description: '',
+        amountCents: 0,
+        currentInstallment: 1,
+        installmentCount: 1,
+      }],
+      rawText: '',
+      sections: [],
+    })
+  }
+
+  function saveInvoice(items: InvoiceItemDraft[], filter: InstallmentFilter) {
+    if (!invoiceDraft) return
+    const { card, invoiceMonth } = invoiceDraft
+    const generated = buildInstallmentTransactions(card, items, invoiceMonth, filter)
+
+    setState((previous) => ({
+      ...previous,
+      transactions: [
+        ...previous.transactions.filter(
+          (item) => !(item.cardId === card.id && item.invoiceMonth === invoiceMonth && item.installmentGroupId),
+        ),
+        ...generated,
+      ],
+    }))
+    setInvoiceDraft(null)
+    setToast(`${generated.length} lançamento(s) salvo(s) no fluxo de caixa.`)
+  }
+
   function updateSettings(year: number, initialBalanceCents: number) {
     setState((previous) => ({ ...previous, year, initialBalanceCents }))
     setToast('Configurações salvas.')
@@ -166,6 +291,9 @@ export default function App() {
     setFocusedMonth(new Date().getMonth())
     setDraft(null)
     setBoxDraft(null)
+    setCardDraft(null)
+    setInvoiceDraft(null)
+    setPasswordDraft(null)
     setToast('Dados limpos.')
   }
 
@@ -247,6 +375,7 @@ export default function App() {
           <Caixinhas
             state={state}
             position={position}
+            monthFlow={planningFlow.months[currentMonth]}
             onAdd={() => setBoxDraft({})}
             onEdit={(box) => setBoxDraft({ box })}
             onDelete={(id) => {
@@ -257,7 +386,21 @@ export default function App() {
           />
         )}
 
-        {tab === 'graficos' && <Graficos state={state} flow={flow} position={position} />}
+        {tab === 'cartoes' && (
+          <Cartoes
+            state={state}
+            onAdd={() => setCardDraft({})}
+            onEdit={(card) => setCardDraft({ card })}
+            onDelete={(id) => {
+              const card = state.cards.find((item) => item.id === id)
+              if (card) setCardDraft({ card })
+            }}
+            onImportPdf={importInvoicePdf}
+            onManual={openManualInvoice}
+          />
+        )}
+
+        {tab === 'graficos' && <Graficos state={state} flow={flow} />}
 
         {tab === 'dados' && (
           <Dados
@@ -280,7 +423,7 @@ export default function App() {
       </main>
 
       <nav className="safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-slate-100 bg-white/90 backdrop-blur-xl sm:hidden" aria-label="Navegação principal">
-        <div className="mx-auto grid max-w-md grid-cols-4">
+        <div className="mx-auto grid max-w-md grid-cols-5">
           {TABS.map((item) => {
             const Icon = item.icon
             return (
@@ -322,6 +465,39 @@ export default function App() {
           onClose={() => setBoxDraft(null)}
           onSave={saveBox}
           onDelete={deleteBox}
+        />
+      )}
+
+      {cardDraft && (
+        <CartaoModal
+          key={cardDraft.card?.id ?? 'new'}
+          card={cardDraft.card}
+          onClose={() => setCardDraft(null)}
+          onSave={saveCard}
+          onDelete={deleteCard}
+        />
+      )}
+
+      {invoiceDraft && (
+        <FaturaImportModal
+          key={`${invoiceDraft.card.id}-${invoiceDraft.invoiceMonth}`}
+          card={invoiceDraft.card}
+          invoiceMonth={invoiceDraft.invoiceMonth}
+          items={invoiceDraft.items}
+          rawText={invoiceDraft.rawText}
+          onClose={() => setInvoiceDraft(null)}
+          onSave={saveInvoice}
+        />
+      )}
+
+      {passwordDraft && (
+        <SenhaPdfModal
+          key={`${passwordDraft.card.id}-${passwordDraft.file.name}-${passwordDraft.invoiceMonth}`}
+          card={passwordDraft.card}
+          file={passwordDraft.file}
+          invoiceMonth={passwordDraft.invoiceMonth}
+          onClose={() => setPasswordDraft(null)}
+          onUnlocked={unlockInvoice}
         />
       )}
 
