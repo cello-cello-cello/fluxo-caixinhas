@@ -71,19 +71,19 @@ export function SenhaPdfModal({ card, file, invoiceMonth, onClose, onUnlocked }:
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/35 backdrop-blur-sm sm:items-center sm:p-6"
+      className="modal-backdrop sm:items-center sm:p-6"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) handleClose()
       }}
     >
-      <div role="dialog" aria-modal="true" aria-labelledby="senha-pdf-title" className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-t-4xl bg-white p-5 shadow-2xl sm:rounded-4xl sm:p-7">
-        <header className="mb-5 flex items-start justify-between gap-3">
+      <div role="dialog" aria-modal="true" aria-labelledby="senha-pdf-title" className="modal-card max-w-md sm:rounded-[20px]">
+        <header className="modal-header sm:px-6">
           <div className="flex items-start gap-3">
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-navy-soft text-navy">
               <Lock size={19} />
             </span>
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-navy">PDF protegido</p>
+              <p className="modal-kicker">PDF protegido</p>
               <h2 id="senha-pdf-title" className="mt-1 text-xl font-extrabold text-slate-900">Senha da fatura</h2>
               <p className="mt-1 text-xs text-slate-500">{card.name} · {invoiceMonth}</p>
             </div>
@@ -93,7 +93,7 @@ export function SenhaPdfModal({ card, file, invoiceMonth, onClose, onUnlocked }:
           </button>
         </header>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form id="senha-form" onSubmit={handleSubmit} className="modal-body space-y-4 sm:px-6">
           <div>
             <label className="label" htmlFor="senha-pdf">Senha do PDF</label>
             <div className="relative">
@@ -118,21 +118,21 @@ export function SenhaPdfModal({ card, file, invoiceMonth, onClose, onUnlocked }:
             </div>
           </div>
 
-          <p className="text-xs leading-relaxed text-slate-500">
-            Informe a senha do arquivo, como os dígitos do CPF quando for esse o caso. Ela é usada apenas nesta leitura, em memória, e não é salva no aplicativo.
-          </p>
+          <p className="text-xs text-slate-400">Usada apenas nesta leitura, sem salvar no app.</p>
 
           {error && (
             <p role="alert" className="rounded-2xl bg-[#FFF3EF] px-4 py-3 text-sm font-semibold text-[#A64B39]">{error}</p>
           )}
+        </form>
 
-          <div className="flex flex-col gap-2 pt-2 sm:flex-row-reverse">
-            <button type="submit" disabled={busy} className="btn-primary w-full sm:w-auto">
+        <footer className="modal-footer sm:px-6">
+          <div className="flex gap-2">
+            <button type="button" onClick={handleClose} className="btn-soft min-h-11 flex-1">Cancelar</button>
+            <button type="submit" form="senha-form" disabled={busy} className="btn-primary min-h-11 flex-[2]">
               {busy ? 'Abrindo...' : 'Tentar abrir'}
             </button>
-            <button type="button" onClick={handleClose} className="btn-soft w-full sm:w-auto">Cancelar</button>
           </div>
-        </form>
+        </footer>
       </div>
     </div>
   )

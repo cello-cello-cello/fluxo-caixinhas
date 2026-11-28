@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildInstallmentTransactions,
   cardCommitment,
+  cardDueDate,
   countPlannedTransactions,
   installmentDueDate,
   parseInvoiceDocument,
@@ -16,6 +17,21 @@ const card: CreditCard = {
   limitCents: 100_000,
   closingDay: 10,
   dueDay: 15,
+}
+
+const parceledItems = [
+  { id: 'parcelada', description: 'Compra', amountCents: 10_000, currentInstallment: 2, installmentCount: 6 },
+]
+
+function invoiceFor(invoiceItems: typeof parceledItems, invoiceMonth = '2026-11') {
+  return {
+    id: `c1:${invoiceMonth}`,
+    cardId: 'c1',
+    invoiceMonth,
+    items: invoiceItems,
+    rawText: '',
+    sections: [],
+  }
 }
 
 describe('importação da fatura', () => {
@@ -143,14 +159,48 @@ describe('projeção de parcelas', () => {
     expect(first.date).toBe('2026-11-20')
   })
 
+  it('respeita fechamento em dezembro e vencimento em janeiro do ano seguinte', () => {
+    const rolloverCard: CreditCard = {
+      ...card,
+      closingDate: '2026-12-25',
+      dueDate: '2027-01-01',
+    }
+    const projections = buildInstallmentTransactions(
+      rolloverCard,
+      [{ id: 'tv', description: 'TV', amountCents: 10_000, currentInstallment: 1, installmentCount: 3 }],
+      '2026-12',
+    )
+
+    expect(cardDueDate(rolloverCard, '2026-12')).toBe('2027-01-01')
+    expect(projections.map((item) => item.date)).toEqual(['2027-01-01', '2027-02-01', '2027-03-01'])
+  })
+
+  it('ajusta vencimento em fim de semana e dia inexistente no mês seguinte', () => {
+    expect(cardDueDate({ ...card, dueDate: '2027-01-02' }, '2026-12')).toBe('2027-01-01')
+    expect(cardDueDate({ ...card, dueDate: '2024-01-31' }, '2023-12', 1)).toBe('2024-02-29')
+  })
+
+  it('não usa lançamentos do fluxo para comprometer o limite do cartão', () => {
+    const state = createInitialState(2026)
+    state.cards = [{ ...card, limitCents: 60_000 }]
+    state.cardInvoices = [invoiceFor(parceledItems)]
+    state.transactions = [{
+      id: 'fluxo',
+      date: '2026-11-15',
+      description: 'Gasto avulso',
+      category: 'Outros',
+      type: 'saida',
+      amountCents: 999_999,
+      cardId: 'c1',
+    }]
+
+    expect(cardCommitment(state, 'c1', new Date(2026, 10, 27)).committedCents).toBe(50_000)
+  })
+
   it('compromete o limite com as parcelas futuras em aberto', () => {
     const state = createInitialState(2026)
     state.cards = [{ ...card, limitCents: 30_000 }]
-    state.transactions = buildInstallmentTransactions(
-      card,
-      [{ id: 'parcelada', description: 'Compra', amountCents: 10_000, currentInstallment: 2, installmentCount: 6 }],
-      '2026-11',
-    )
+    state.cardInvoices = [invoiceFor(parceledItems)]
 
     expect(cardCommitment(state, 'c1', new Date(2026, 10, 27))).toEqual({
       committedCents: 50_000,
@@ -163,22 +213,10 @@ describe('projeção de parcelas', () => {
   it('desconta créditos e pagamentos do comprometimento do limite', () => {
     const state = createInitialState(2026)
     state.cards = [{ ...card, limitCents: 30_000 }]
-    state.transactions = [
-      ...buildInstallmentTransactions(
-        card,
-        [{ id: 'parcelada', description: 'Compra', amountCents: 10_000, currentInstallment: 2, installmentCount: 6 }],
-        '2026-11',
-      ),
-      {
-        id: 'pagamento',
-        date: '2026-11-15',
-        description: 'Pagamento (2/6)',
-        category: 'Cartão',
-        type: 'entrada',
-        amountCents: 20_000,
-        cardId: 'c1',
-      },
-    ]
+    state.cardInvoices = [invoiceFor([
+      ...parceledItems,
+      { id: 'credito', description: 'Crédito', amountCents: -20_000, currentInstallment: 1, installmentCount: 1 },
+    ])]
 
     expect(cardCommitment(state, 'c1', new Date(2026, 10, 27))).toEqual({
       committedCents: 30_000,

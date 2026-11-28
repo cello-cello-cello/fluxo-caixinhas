@@ -7,7 +7,7 @@ import {
   Plus,
   Upload,
 } from 'lucide-react'
-import { cardCommitment, installmentDueDate } from '../lib/invoices'
+import { cardCommitment, cardDueDate } from '../lib/invoices'
 import { formatDate, todayIso } from '../lib/dates'
 import { formatBRL } from '../lib/money'
 import type { AppState, CreditCard } from '../types'
@@ -44,7 +44,7 @@ export function Cartoes({ state, onAdd, onEdit, onDelete, onImportPdf, onManual 
 
   return (
     <section>
-      <header className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <header className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-2xl font-extrabold tracking-tight text-slate-900">Cartões</h2>
         </div>
@@ -53,23 +53,23 @@ export function Cartoes({ state, onAdd, onEdit, onDelete, onImportPdf, onManual 
         </button>
       </header>
 
-      <div className="card mb-4 grid grid-cols-2 gap-4 sm:grid-cols-3">
+      <div className="card mb-5 grid grid-cols-1 gap-5 p-5 sm:grid-cols-3 sm:p-6">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Limite total</p>
-          <p className="money mt-1 text-lg font-extrabold text-slate-900">{formatBRL(totals.limit)}</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Limite total</p>
+          <p className="money mt-1 text-xl font-extrabold text-slate-900">{formatBRL(totals.limit)}</p>
         </div>
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Comprometido</p>
-          <p className="money mt-1 text-lg font-extrabold text-[#1E3A5F]">{formatBRL(totals.committed)}</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Comprometido</p>
+          <p className="money mt-1 text-xl font-extrabold text-[#1E3A5F]">{formatBRL(totals.committed)}</p>
         </div>
-        <div className="col-span-2 sm:col-span-1">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Limite disponível</p>
-          <p className="money mt-1 text-lg font-extrabold text-moss-dark">{formatBRL(totals.available)}</p>
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Limite disponível</p>
+          <p className="money mt-1 text-xl font-extrabold text-moss-dark">{formatBRL(totals.available)}</p>
         </div>
       </div>
 
       {state.cards.length === 0 ? (
-        <div className="card flex flex-col items-center py-12 text-center">
+        <div className="card flex flex-col items-center p-8 py-12 text-center">
           <div className="grid h-16 w-16 place-items-center rounded-full bg-navy-soft text-navy">
             <CreditCardIcon size={26} />
           </div>
@@ -80,14 +80,14 @@ export function Cartoes({ state, onAdd, onEdit, onDelete, onImportPdf, onManual 
           </button>
         </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
           {state.cards.map((card) => {
             const commitment = cardCommitment(state, card.id, currentDate)
             const used = card.limitCents > 0 ? Math.min(100, Math.round(commitment.committedCents / card.limitCents * 100)) : 100
-            const nextDue = installmentDueDate(card, currentDate.getFullYear(), currentDate.getMonth())
+            const nextDue = cardDueDate(card, todayIso().slice(0, 7))
 
             return (
-              <article key={card.id} className="card relative overflow-hidden pt-6">
+              <article key={card.id} className="card relative overflow-hidden p-5 pt-6 sm:p-6 sm:pt-7">
                 <span className="absolute inset-x-0 top-0 h-1 bg-navy" />
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex min-w-0 items-center gap-3">
@@ -122,7 +122,11 @@ export function Cartoes({ state, onAdd, onEdit, onDelete, onImportPdf, onManual 
                       <p className="money mt-0.5 text-sm font-bold text-slate-700">{formatBRL(commitment.committedCents)}</p>
                     </div>
                   </div>
-                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
+                  <div className="mt-2 flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    <span>Uso do limite</span>
+                    <span className="money text-[11px] text-navy">{used}%</span>
+                  </div>
+                  <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-[#EEF2F6]">
                     <div
                       className={`h-full rounded-full ${commitment.exceeded ? 'bg-rose-600' : 'bg-navy'}`}
                       style={{ width: `${used}%` }}
@@ -135,12 +139,13 @@ export function Cartoes({ state, onAdd, onEdit, onDelete, onImportPdf, onManual 
                   )}
                 </div>
 
-                <div className="mt-4 space-y-2 border-t border-slate-100 pt-4 text-[11px] text-slate-500">
+                <div className="mt-5 space-y-2 border-t border-[#E6EAF0] pt-4 text-[11px] text-slate-500">
                   <p className="flex items-center gap-2">
                     <CalendarDays size={14} className="text-slate-400" />
-                    Fecha dia {card.closingDay} · vence dia {card.dueDay} · próximo {formatDate(nextDue)}
+                    Fecha {card.closingDate ? formatDate(card.closingDate) : `dia ${card.closingDay}`} · vence {formatDate(nextDue)}
                   </p>
-                  <p>{commitment.openInstallments} parcela(s) em aberto a partir deste mês.</p>
+                  <p>{commitment.openInstallments} parcela(s) em aberto desde este mês.</p>
+                  <p>Fatura atual + parcelas futuras em aberto.</p>
                 </div>
 
                 <div className="mt-4 grid gap-2 sm:grid-cols-2">

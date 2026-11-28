@@ -2,6 +2,16 @@ import { parseIsoDate, todayIso } from './dates'
 import { formatBRL } from './money'
 import type { Box } from '../types'
 
+export function boxTargetMonth(box: Box): string | undefined {
+  if (box.targetMonth && /^\d{4}-\d{2}$/.test(box.targetMonth)) return box.targetMonth
+  return box.targetDate?.slice(0, 7)
+}
+
+export function boxTargetIso(box: Box): string | undefined {
+  const month = boxTargetMonth(box)
+  return month ? `${month}-01` : undefined
+}
+
 export function monthsUntil(targetDate: string, fromDate = todayIso()): number {
   const target = parseIsoDate(targetDate)
   const from = parseIsoDate(fromDate)
@@ -33,11 +43,11 @@ export interface BoxGoalPlan {
 export function planBoxGoal(box: Box, balanceCents: number, fromDate = todayIso()): BoxGoalPlan | null {
   if (box.goalCents <= 0) return null
 
-  const from = parseIsoDate(fromDate)
-  const target = box.targetDate ? parseIsoDate(box.targetDate) : null
-  const monthsRemaining = from && target
-    ? Math.max(0, (target.year - from.year) * 12 + (target.month - from.month))
-    : 0
+  const targetMonth = boxTargetMonth(box)
+  const fromMonth = fromDate.slice(0, 7)
+  const targetIndex = targetMonth ? Number(targetMonth.slice(0, 4)) * 12 + Number(targetMonth.slice(5)) : null
+  const fromIndex = Number(fromMonth.slice(0, 4)) * 12 + Number(fromMonth.slice(5))
+  const monthsRemaining = targetIndex !== null ? Math.max(0, targetIndex - fromIndex) : 0
   const remainingCents = Math.max(0, box.goalCents - balanceCents)
 
   return {
@@ -45,8 +55,8 @@ export function planBoxGoal(box: Box, balanceCents: number, fromDate = todayIso(
     monthsRemaining,
     monthlyContributionCents: monthsRemaining > 0 ? Math.round(remainingCents / monthsRemaining) : remainingCents,
     achieved: balanceCents >= box.goalCents,
-    overdue: Boolean(box.targetDate && box.targetDate < fromDate),
-    hasTargetDate: Boolean(box.targetDate),
+    overdue: Boolean(targetMonth && targetMonth < fromMonth),
+    hasTargetDate: Boolean(targetMonth),
   }
 }
 

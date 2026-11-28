@@ -30,6 +30,10 @@ function balanceTone(value: number): string {
   return value < 0 ? 'text-[#C0604D]' : 'text-[#4A6B53]'
 }
 
+function negativeDaySurface(value: number): string {
+  return value < 0 ? 'bg-[#FFF3EF] ring-1 ring-[#C0604D]/30' : ''
+}
+
 export function FluxoAnual({
   flow,
   focusedMonth,
@@ -61,11 +65,11 @@ export function FluxoAnual({
 
   return (
     <section>
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-2xl font-extrabold tracking-tight text-slate-900">Ano de {flow.year}</h2>
         </div>
-        <div className="inline-flex w-fit rounded-2xl bg-slate-100 p-1" role="group" aria-label="Modo de visualização">
+        <div className="inline-flex w-fit rounded-2xl border border-[#E6EAF0] bg-white p-1 shadow-soft" role="group" aria-label="Modo de visualização">
           {(
             [
               ['month', 'Mês focado'],
@@ -87,13 +91,13 @@ export function FluxoAnual({
         </div>
       </div>
 
-      <div className="mb-4 flex items-center gap-2">
+      <div className="mb-5 flex items-center gap-2">
         <button
           type="button"
           onClick={() => moveMonth(-1)}
           disabled={focusedMonth === 0}
           aria-label="Mês anterior"
-          className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-slate-200 bg-white text-[#1E3A5F] transition hover:border-[#1E3A5F] hover:bg-[#E9EFF5] disabled:cursor-not-allowed disabled:opacity-40"
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-[#E6EAF0] bg-white text-[#1E3A5F] shadow-soft transition hover:border-[#1E3A5F] hover:bg-[#E9EFF5] disabled:cursor-not-allowed disabled:opacity-40"
         >
           <ChevronLeft size={18} />
         </button>
@@ -110,11 +114,11 @@ export function FluxoAnual({
               onClick={() => onFocusedMonth(item.month)}
               aria-label={`${MONTH_NAMES[item.month]}: fechamento ${formatBRL(item.closingBalanceCents)}`}
               aria-current={focusedMonth === item.month ? 'true' : undefined}
-              className={`min-w-[92px] shrink-0 rounded-2xl border px-3 py-2.5 text-left transition ${
-                focusedMonth === item.month
-                  ? 'border-[#1E3A5F] bg-[#E9EFF5]'
-                  : 'border-slate-100 bg-white hover:border-slate-200'
-              }`}
+                className={`min-w-[104px] shrink-0 rounded-[14px] border bg-white px-4 py-3 text-left shadow-soft transition ${
+                  focusedMonth === item.month
+                    ? 'border-[#1E3A5F] bg-[#E9EFF5]'
+                    : `border-[#E6EAF0] hover:border-[#1E3A5F] ${negativeDaySurface(item.closingBalanceCents)}`
+                }`}
             >
               <span className={`block text-[11px] font-bold uppercase tracking-wide ${focusedMonth === item.month ? 'text-[#1E3A5F]' : 'text-slate-400'}`}>
                 {MONTH_SHORT[item.month]}
@@ -131,14 +135,14 @@ export function FluxoAnual({
           onClick={() => moveMonth(1)}
           disabled={focusedMonth === 11}
           aria-label="Próximo mês"
-          className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-slate-200 bg-white text-[#1E3A5F] transition hover:border-[#1E3A5F] hover:bg-[#E9EFF5] disabled:cursor-not-allowed disabled:opacity-40"
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-[#E6EAF0] bg-white text-[#1E3A5F] shadow-soft transition hover:border-[#1E3A5F] hover:bg-[#E9EFF5] disabled:cursor-not-allowed disabled:opacity-40"
         >
           <ChevronRight size={18} />
         </button>
       </div>
 
       {viewMode === 'month' ? (
-        <article className="card">
+        <article className="card p-5 sm:p-6">
           <header className="flex items-start justify-between gap-3">
             <div>
               <h3 className="text-xl font-extrabold text-slate-900">
@@ -150,37 +154,37 @@ export function FluxoAnual({
             </button>
           </header>
 
-          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <MiniStat label="Entradas" value={month.incomeCents} tone="moss" />
             <MiniStat label="Saídas" value={month.expenseCents} tone="coral" />
             <MiniStat label="Para caixinhas" value={month.toBoxCents} tone="navy" />
             <MiniStat label="Fechamento" value={month.closingBalanceCents} tone="auto" />
           </div>
 
-          <div className="mt-5 divide-y divide-slate-100 border-t border-slate-100">
+          <div className="mt-6 divide-y divide-[#E6EAF0] border-t border-[#E6EAF0]">
             {month.days.map((day) => {
               const weekday = weekdayShort(flow.year, month.month, day.day)
               const weekend = isWeekend(flow.year, month.month, day.day)
               const isToday = day.date === today
 
               return (
-                <div key={day.date} className="py-1.5">
+                <div key={day.date} className="py-2">
                   <button
                     type="button"
                     onClick={() => onOpenDay(day.date)}
                     aria-label={`${day.day} de ${MONTH_NAMES[month.month]}, ${weekday}${isToday ? ', hoje' : ''}: saldo ${formatBRL(day.balanceCents)}`}
-                    className="grid w-full grid-cols-[44px_1fr_auto] items-center gap-3 rounded-2xl px-2 py-2 text-left transition hover:bg-slate-50"
+                    className={`grid w-full grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-3 rounded-[14px] border border-transparent px-2.5 py-2.5 text-left transition hover:border-[#E6EAF0] hover:bg-white ${negativeDaySurface(day.balanceCents)}`}
                   >
                     <span
                       className={`grid h-11 w-11 shrink-0 place-content-center rounded-xl border text-center transition ${
                         isToday
                           ? 'border-[#1E3A5F] bg-[#E9EFF5]'
                           : weekend
-                            ? 'border-[#FFF3EF] bg-[#FFF8F5]'
-                            : 'border-slate-100 bg-slate-50/70'
+                            ? 'border-[#F0DDD7] bg-[#FFF8F5]'
+                            : 'border-[#E6EAF0] bg-[#F8FAFC]'
                       }`}
                     >
-                      <span className={`text-sm font-extrabold leading-none ${isToday ? 'text-[#1E3A5F]' : weekend ? 'text-[#C0604D]' : 'text-slate-600'}`}>
+                      <span className={`text-sm font-extrabold leading-none ${isToday ? 'text-[#1E3A5F]' : weekend ? 'text-[#C0604D]' : 'text-slate-500'}`}>
                         {day.day}
                       </span>
                       <span className={`mt-0.5 text-[9px] font-bold leading-none ${weekend ? 'text-[#C0604D]' : 'text-slate-400'}`}>
@@ -188,7 +192,7 @@ export function FluxoAnual({
                       </span>
                     </span>
                     <span className="min-w-0">
-                      <span className="block truncate text-sm font-semibold text-slate-700">
+                      <span className={`block truncate text-sm font-semibold ${day.transactions.length === 0 ? 'text-slate-300' : 'text-slate-700'}`}>
                         {day.transactions.length === 0
                           ? '—'
                           : day.transactions.map((item) => item.description).slice(0, 2).join(', ')}
@@ -218,7 +222,7 @@ export function FluxoAnual({
                           key={transaction.id}
                           type="button"
                           onClick={() => onEditTransaction(transaction)}
-                          className="rounded-lg bg-slate-50 px-2 py-1 text-[11px] font-medium text-slate-500 transition hover:bg-[#E9EFF5] hover:text-[#1E3A5F]"
+                          className="min-h-8 rounded-lg border border-[#E6EAF0] bg-[#F8FAFC] px-2 py-1 text-[11px] font-medium text-slate-500 transition hover:border-[#1E3A5F] hover:bg-white hover:text-[#1E3A5F]"
                         >
                           {transaction.description} · {formatBRLCompact(transaction.amountCents)}
                           {transaction.recurrenceDay
@@ -236,7 +240,7 @@ export function FluxoAnual({
           </div>
         </article>
       ) : (
-        <article className="card !p-3 sm:!p-5">
+        <article className="card !p-3 sm:!p-6">
           <div className="mb-3 flex items-center justify-between gap-3 px-2">
             <p className="flex items-center gap-2 text-xs text-slate-500">
               <CalendarDays size={15} className="text-[#1E3A5F]" />
@@ -249,11 +253,11 @@ export function FluxoAnual({
             </div>
           </div>
 
-          <div className="overflow-x-auto rounded-2xl border border-slate-100">
+          <div className="overflow-x-auto rounded-[16px] border border-[#E6EAF0] bg-white">
             <table className="w-full min-w-[1120px] border-collapse text-left">
               <thead>
-                <tr className="bg-[#E9EFF5]">
-                  <th scope="col" className="sticky left-0 z-10 w-16 bg-[#E9EFF5] px-3 py-3 text-[11px] font-bold uppercase tracking-wider text-[#1E3A5F]">
+                    <tr className="bg-[#F1F5F9]">
+                      <th scope="col" className="sticky left-0 z-10 w-16 bg-[#F1F5F9] px-3 py-3 text-[11px] font-bold uppercase tracking-wider text-[#1E3A5F]">
                     Dia
                   </th>
                   {flow.months.map((item) => (
@@ -277,7 +281,7 @@ export function FluxoAnual({
                   const rowWeekend = hasDay && isWeekend(flow.year, focusedMonth, day)
 
                   return (
-                    <tr key={day} className="border-t border-slate-50">
+                    <tr key={day} className="border-t border-[#EEF2F6]">
                       <th scope="row" className="sticky left-0 z-10 bg-white/95 px-3 py-1.5 text-left backdrop-blur">
                         <span className="block text-[11px] font-bold text-slate-500">{String(day).padStart(2, '0')}</span>
                         <span className={`mt-0.5 block text-[9px] font-semibold ${rowWeekend ? 'text-[#C0604D]' : 'text-slate-400'}`}>
@@ -305,11 +309,13 @@ export function FluxoAnual({
                               onClick={() => onOpenDay(dayFlow.date)}
                               aria-label={`${day} de ${MONTH_NAMES[item.month]}, ${weekday}${isToday ? ', hoje' : ''}: saldo ${formatBRL(dayFlow.balanceCents)}`}
                               className={`relative w-full rounded-xl px-1.5 py-1.5 transition hover:bg-[#E9EFF5] ${
-                                isToday
-                                  ? 'bg-[#E9EFF5] ring-1 ring-[#1E3A5F]'
-                                  : dayFlow.transactions.length > 0
-                                    ? 'bg-slate-50/70'
-                                    : ''
+                                dayFlow.balanceCents < 0
+                                  ? negativeDaySurface(dayFlow.balanceCents)
+                                  : isToday
+                                    ? 'bg-[#E9EFF5] ring-1 ring-[#1E3A5F]'
+                                    : dayFlow.transactions.length > 0
+                                      ? 'bg-slate-50/70'
+                                      : ''
                               }`}
                             >
                               <span className={`money block text-[10px] font-bold ${balanceTone(dayFlow.balanceCents)}`}>
@@ -334,8 +340,8 @@ export function FluxoAnual({
                 })}
               </tbody>
               <tfoot>
-                <tr className="border-t-2 border-slate-100 bg-[#E9EFF5]">
-                  <th scope="row" className="sticky left-0 z-10 bg-[#E9EFF5] px-3 py-3 text-[10px] font-extrabold uppercase text-[#1E3A5F]">
+                <tr className="border-t-2 border-[#E6EAF0] bg-[#F1F5F9]">
+                  <th scope="row" className="sticky left-0 z-10 bg-[#F1F5F9] px-3 py-3 text-[10px] font-extrabold uppercase text-[#1E3A5F]">
                     Fecha
                   </th>
                   {flow.months.map((item) => (
@@ -355,9 +361,9 @@ export function FluxoAnual({
 
 function MiniStat({ label, value, tone }: { label: string; value: number; tone: MiniTone }) {
   return (
-    <div className="rounded-2xl border border-slate-100 bg-white p-3">
+    <div className="rounded-[14px] border border-[#E6EAF0] bg-[#F8FAFC] p-4">
       <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</p>
-      <p className={`money mt-1 text-sm font-extrabold sm:text-base ${tone === 'auto' ? balanceTone(value) : TONE_CLASS[tone]}`}>
+      <p className={`money mt-1 text-base font-extrabold sm:text-lg ${tone === 'auto' ? balanceTone(value) : TONE_CLASS[tone]}`}>
         {formatBRL(value)}
       </p>
     </div>

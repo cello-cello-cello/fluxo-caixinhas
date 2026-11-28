@@ -34,17 +34,17 @@ export function Donut({ segments, title, subtitle, control, fullTotal = false }:
     })
 
   return (
-    <div className="card">
-      <div className="mb-4 flex items-start justify-between gap-3">
+    <div className="card flex h-full flex-col p-5 sm:p-6">
+      <div className="mb-5 flex items-start justify-between gap-3">
         <div>
           <h3 className="text-[15px] font-bold text-slate-900">{title}</h3>
           {subtitle && <p className="mt-1 text-xs text-slate-400">{subtitle}</p>}
         </div>
-        <span className="chip bg-[#E9EFF5] text-[#1E3A5F]">{total > 0 ? '100%' : '—'}</span>
+        <span className="chip shrink-0 bg-[#E9EFF5] text-[#1E3A5F]">{total > 0 ? '100%' : '—'}</span>
       </div>
-      {control && <div className="mb-4">{control}</div>}
+      {control && <div className="mb-5">{control}</div>}
 
-      <div className="flex flex-col items-center gap-5 sm:flex-row sm:items-center sm:gap-7">
+      <div className="flex flex-col items-center gap-5 sm:flex-row sm:items-center sm:gap-8">
         <div className="relative shrink-0" style={{ width: size, height: size }}>
           <svg width={size} height={size} className="-rotate-90" aria-label={title} role="img">
             <circle cx={size / 2} cy={size / 2} r={radius} stroke={CHART_COLORS.track} strokeWidth={stroke} fill="none" />

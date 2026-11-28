@@ -17,6 +17,16 @@ export const MONTH_SHORT = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ag
 
 export const WEEKDAY_SHORT = ['dom.', 'seg.', 'ter.', 'qua.', 'qui.', 'sex.', 'sáb.'] as const
 
+export const WEEKDAY_LONG = [
+  'domingo',
+  'segunda-feira',
+  'terça-feira',
+  'quarta-feira',
+  'quinta-feira',
+  'sexta-feira',
+  'sábado',
+] as const
+
 export function daysInMonth(year: number, month: number): number {
   return new Date(year, month + 1, 0).getDate()
 }
@@ -87,4 +97,12 @@ export function formatDate(value: string): string {
 
 export function monthYearLabel(year: number, month: number): string {
   return `${MONTH_NAMES[month]} de ${year}`
+}
+
+export function formatFriendlyDate(value: string): string {
+  const parsed = parseIsoDate(value)
+  if (!parsed) return value
+  const weekday = WEEKDAY_LONG[new Date(parsed.year, parsed.month, parsed.day).getDay()]
+  const label = weekday.charAt(0).toUpperCase() + weekday.slice(1)
+  return `${String(parsed.day).padStart(2, '0')} de ${MONTH_NAMES[parsed.month]} · ${label}`
 }

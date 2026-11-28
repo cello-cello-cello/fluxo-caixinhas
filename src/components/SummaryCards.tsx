@@ -14,7 +14,7 @@ export function SummaryCards({ flow, position }: SummaryCardsProps) {
       value: flow.closingBalanceCents,
       detail: `Aberto com ${formatBRL(flow.openingBalanceCents)}`,
       icon: Wallet,
-      tone: 'text-slate-900',
+      tone: flow.closingBalanceCents < 0 ? 'text-[#C0604D]' : 'text-slate-900',
       background: 'bg-slate-50',
     },
     {
@@ -38,25 +38,29 @@ export function SummaryCards({ flow, position }: SummaryCardsProps) {
       value: position.netWorthCents,
       detail: `${formatBRL(position.freeBalanceCents)} livres`,
       icon: Layers3,
-      tone: 'text-slate-900',
+      tone: position.netWorthCents < 0 ? 'text-[#C0604D]' : 'text-slate-900',
       background: 'bg-slate-50',
     },
   ]
 
   return (
-    <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4" aria-label="Resumo do ano">
+    <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4" aria-label="Resumo do ano">
       {items.map((item) => {
         const Icon = item.icon
         return (
-          <article key={item.label} className="card p-4 sm:p-5">
-            <div className={`mb-4 grid h-9 w-9 place-items-center rounded-xl ${item.background} ${item.tone}`}>
-              <Icon size={18} strokeWidth={2.2} />
+          <article key={item.label} className="card flex min-h-[138px] flex-col justify-between p-5 sm:p-6">
+            <div className="flex items-start justify-between gap-3">
+              <p className="text-xs font-semibold text-slate-500">{item.label}</p>
+              <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${item.background} ${item.tone}`}>
+                <Icon size={18} strokeWidth={2.2} />
+              </span>
             </div>
-            <p className="text-xs font-semibold text-slate-400">{item.label}</p>
-            <p className={`money mt-1.5 text-xl font-extrabold tracking-tight sm:text-2xl ${item.tone}`}>
-              {formatBRL(item.value)}
-            </p>
-            {item.detail && <p className="money mt-2 truncate text-[11px] text-slate-400">{item.detail}</p>}
+            <div>
+              <p className={`money mt-4 text-2xl font-extrabold tracking-tight sm:text-[26px] ${item.tone}`}>
+                {formatBRL(item.value)}
+              </p>
+              {item.detail && <p className="money mt-1 truncate text-[11px] text-slate-400">{item.detail}</p>}
+            </div>
           </article>
         )
       })}

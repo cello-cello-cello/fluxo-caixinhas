@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import App from '../App'
-import { isoDate, MONTH_NAMES } from '../lib/dates'
+import { formatFriendlyDate, isoDate, MONTH_NAMES } from '../lib/dates'
+import { buildInstallmentTransactions } from '../lib/invoices'
 import { readPdfInvoiceLines } from '../lib/pdfInvoice'
 import { formatBRL } from '../lib/money'
 import { createInitialState } from '../lib/storage'
@@ -33,6 +34,8 @@ describe('aplicação', () => {
     const dialog = screen.getByRole('dialog')
 
     fireEvent.change(within(dialog).getByLabelText('Data'), { target: { value: `${year}-01-05` } })
+    expect(within(dialog).getByRole('heading', { name: formatFriendlyDate(`${year}-01-05`) })).toBeInTheDocument()
+    expect(within(dialog).queryByText('PAINEL DO DIA')).not.toBeInTheDocument()
     fireEvent.change(within(dialog).getByLabelText('Valor (R$)'), { target: { value: '10,00' } })
     fireEvent.change(within(dialog).getByLabelText('Descrição'), { target: { value: 'Café' } })
     fireEvent.click(within(dialog).getByRole('button', { name: 'Adicionar ao dia' }))
@@ -105,6 +108,22 @@ describe('aplicação', () => {
     expect(screen.getAllByText('dom.').length).toBeGreaterThan(0)
   })
 
+  it('destaca em vermelho os dias com saldo livre negativo', () => {
+    const year = new Date().getFullYear()
+    const month = new Date().getMonth()
+    const state = createInitialState(year)
+    state.transactions = [
+      { id: 'conta', date: isoDate(year, month, 1), description: 'Conta', category: 'Outros', type: 'saida', amountCents: 10_000 },
+    ]
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+
+    render(<App />)
+
+    const firstDay = screen.getByRole('button', { name: /^1 de .*: saldo/ })
+    expect(firstDay).toHaveClass('bg-[#FFF3EF]')
+    expect(firstDay).toHaveClass('ring-1')
+  })
+
   it('navega entre as abas principais', () => {
     render(<App />)
 
@@ -141,7 +160,7 @@ describe('aplicação', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Novo' }))
     const dialog = screen.getByRole('dialog')
-    const repeat = within(dialog).getByLabelText('Repetir todo mês no dia selecionado')
+    const repeat = within(dialog).getByLabelText('Repetir mensalmente')
     expect(repeat).not.toBeChecked()
 
     fireEvent.change(within(dialog).getByLabelText('Data'), { target: { value: '2026-01-31' } })
@@ -162,7 +181,7 @@ describe('aplicação', () => {
     expect(within(februaryDialog).getByText('Aluguel')).toBeInTheDocument()
 
     fireEvent.click(within(februaryDialog).getByRole('button', { name: 'Editar Aluguel' }))
-    expect(within(februaryDialog).getByLabelText('Repetir todo mês no dia selecionado')).toBeChecked()
+    expect(within(februaryDialog).getByLabelText('Repetir mensalmente')).toBeChecked()
     fireEvent.change(within(februaryDialog).getByLabelText('Valor (R$)'), { target: { value: '20,00' } })
     fireEvent.click(within(februaryDialog).getByRole('button', { name: 'Salvar alterações' }))
 
@@ -189,7 +208,7 @@ describe('aplicação', () => {
     fireEvent.change(within(dialog).getByLabelText('Data'), { target: { value: '2026-12-15' } })
     fireEvent.change(within(dialog).getByLabelText('Valor (R$)'), { target: { value: '10,00' } })
     fireEvent.change(within(dialog).getByLabelText('Descrição'), { target: { value: 'Aluguel' } })
-    fireEvent.click(within(dialog).getByLabelText('Repetir todo mês no dia selecionado'))
+    fireEvent.click(within(dialog).getByLabelText('Repetir mensalmente'))
     fireEvent.click(within(dialog).getByRole('button', { name: 'Adicionar ao dia' }))
     fireEvent.click(within(dialog).getAllByRole('button', { name: 'Fechar' })[1])
 
@@ -201,7 +220,7 @@ describe('aplicação', () => {
     expect(within(januaryDialog).getByText('Aluguel')).toBeInTheDocument()
 
     fireEvent.click(within(januaryDialog).getByRole('button', { name: 'Editar Aluguel' }))
-    expect(within(januaryDialog).getByLabelText('Repetir todo mês no dia selecionado')).toBeChecked()
+    expect(within(januaryDialog).getByLabelText('Repetir mensalmente')).toBeChecked()
 
     fireEvent.change(within(januaryDialog).getByLabelText('Valor (R$)'), { target: { value: '20,00' } })
     fireEvent.click(within(januaryDialog).getByRole('button', { name: 'Salvar alterações' }))
@@ -226,7 +245,7 @@ describe('aplicação', () => {
     fireEvent.change(within(dialog).getByLabelText('Data'), { target: { value: '2026-01-31' } })
     fireEvent.change(within(dialog).getByLabelText('Valor (R$)'), { target: { value: '10,00' } })
     fireEvent.change(within(dialog).getByLabelText('Descrição'), { target: { value: 'Aluguel' } })
-    fireEvent.click(within(dialog).getByLabelText('Repetir todo mês no dia selecionado'))
+    fireEvent.click(within(dialog).getByLabelText('Repetir mensalmente'))
     fireEvent.change(within(dialog).getByLabelText('Mês final da recorrência'), { target: { value: '3' } })
     fireEvent.change(within(dialog).getByLabelText('Ano final da recorrência'), { target: { value: '2026' } })
     fireEvent.click(within(dialog).getByRole('button', { name: 'Adicionar ao dia' }))
@@ -245,7 +264,7 @@ describe('aplicação', () => {
     fireEvent.change(within(invalidDialog).getByLabelText('Data'), { target: { value: '2026-12-10' } })
     fireEvent.change(within(invalidDialog).getByLabelText('Valor (R$)'), { target: { value: '10,00' } })
     fireEvent.change(within(invalidDialog).getByLabelText('Descrição'), { target: { value: 'Conta' } })
-    fireEvent.click(within(invalidDialog).getByLabelText('Repetir todo mês no dia selecionado'))
+    fireEvent.click(within(invalidDialog).getByLabelText('Repetir mensalmente'))
     fireEvent.change(within(invalidDialog).getByLabelText('Mês final da recorrência'), { target: { value: '0' } })
     fireEvent.change(within(invalidDialog).getByLabelText('Ano final da recorrência'), { target: { value: '2026' } })
     fireEvent.click(within(invalidDialog).getByRole('button', { name: 'Adicionar ao dia' }))
@@ -441,7 +460,7 @@ describe('aplicação', () => {
     fireEvent.change(within(dialog).getByLabelText('Data'), { target: { value: '2026-09-19' } })
     fireEvent.change(within(dialog).getByLabelText('Valor (R$)'), { target: { value: '10,00' } })
     fireEvent.change(within(dialog).getByLabelText('Descrição'), { target: { value: 'Café' } })
-    fireEvent.click(within(dialog).getByLabelText('Antecipar se cair em sábado ou domingo'))
+    fireEvent.click(within(dialog).getByLabelText('Antecipar se cair no fim de semana'))
     expect(within(dialog).getByText('Data efetiva: 18 set 2026')).toBeInTheDocument()
     fireEvent.click(within(dialog).getByRole('button', { name: 'Adicionar ao dia' }))
     fireEvent.click(within(dialog).getAllByRole('button', { name: 'Fechar' })[1])
@@ -481,7 +500,86 @@ describe('aplicação', () => {
     expect(within(card).getByText(/Mantém o saldo livre positivo até o fim do mês/)).toBeInTheDocument()
   })
 
-  it('cadastra um cartão e mostra o limite disponível', () => {
+  it('cria aporte automático com mês alvo e mostra o histórico da caixinha', () => {
+    const nextYear = new Date().getFullYear() + 1
+    const state = createInitialState(nextYear)
+    state.initialBalanceCents = 100_000
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+
+    render(<App />)
+    fireEvent.click(screen.getAllByRole('button', { name: 'Caixinhas' })[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Nova caixinha' }))
+
+    const dialog = screen.getByRole('dialog')
+    fireEvent.change(within(dialog).getByLabelText('Nome'), { target: { value: 'Viagem' } })
+    fireEvent.change(within(dialog).getByLabelText('Meta (R$)'), { target: { value: '1.000,00' } })
+    fireEvent.change(within(dialog).getByLabelText('Mês alvo'), { target: { value: '11' } })
+    fireEvent.change(within(dialog).getByLabelText('Ano alvo'), { target: { value: String(nextYear) } })
+    fireEvent.change(within(dialog).getByLabelText('Aporte mensal automático (R$)'), { target: { value: '100,00' } })
+    fireEvent.change(within(dialog).getByLabelText('Dia do aporte'), { target: { value: '5' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Salvar caixinha' }))
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as {
+      boxes: Array<{ id: string; name: string; targetMonth?: string; autoContributionCents?: number; autoContributionDay?: number }>
+      transactions: Array<{
+        type: string
+        amountCents: number
+        boxId?: string
+        autoBoxId?: string
+        recurrenceDay?: number
+        recurrenceEnd?: string
+      }>
+    }
+    expect(saved.boxes[0]).toMatchObject({
+      name: 'Viagem',
+      targetMonth: `${nextYear}-12`,
+      autoContributionCents: 10_000,
+      autoContributionDay: 5,
+    })
+    expect(saved.transactions).toHaveLength(1)
+    expect(saved.transactions[0]).toMatchObject({
+      type: 'guardar',
+      amountCents: 10_000,
+      boxId: saved.boxes[0].id,
+      autoBoxId: saved.boxes[0].id,
+      recurrenceDay: 5,
+      recurrenceEnd: `${nextYear}-12`,
+    })
+
+    const card = screen.getByRole('heading', { name: 'Viagem' }).closest('article') as HTMLElement
+    expect(within(card).getByText(`Alvo: ${MONTH_NAMES[11]} de ${nextYear}`)).toBeInTheDocument()
+    expect(within(card).getByText(/Aporte automático: R\$ 100,00 · dia 5/)).toBeInTheDocument()
+    expect(within(card).getAllByText(/Aporte automático · Viagem/).length).toBeGreaterThan(0)
+  })
+
+  it('oferece modo demonstração e volta aos dados reais', () => {
+    const year = new Date().getFullYear()
+    const state = createInitialState(year)
+    state.boxes = [{ id: 'real', name: 'Minha reserva real', color: '#4A6B53', balanceCents: 1_000, goalCents: 2_000 }]
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+
+    render(<App />)
+    fireEvent.click(screen.getAllByRole('button', { name: 'Dados' })[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Modo demonstração' }))
+
+    expect(screen.getByText('Você está vendo dados fictícios. Seus valores reais ficaram guardados.')).toBeInTheDocument()
+    expect(localStorage.getItem(STORAGE_KEY)).toContain('Minha reserva real')
+    expect(localStorage.getItem(STORAGE_KEY)).not.toContain('Viagem 2027')
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Caixinhas' })[0])
+    expect(screen.getByRole('heading', { name: 'Viagem 2027' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Dados' })[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Voltar aos meus dados' }))
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Caixinhas' })[0])
+    expect(screen.getByRole('heading', { name: 'Minha reserva real' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Viagem 2027' })).not.toBeInTheDocument()
+  })
+
+  it('cadastra um cartão com fechamento e vencimento em anos diferentes e permanece em Cartões', () => {
     const year = new Date().getFullYear()
     localStorage.setItem(STORAGE_KEY, JSON.stringify(createInitialState(year)))
 
@@ -492,20 +590,70 @@ describe('aplicação', () => {
     const dialog = screen.getByRole('dialog')
     fireEvent.change(within(dialog).getByLabelText('Nome ou apelido'), { target: { value: 'Nubank' } })
     fireEvent.change(within(dialog).getByLabelText('Limite total (R$)'), { target: { value: '1.000,00' } })
-    fireEvent.change(within(dialog).getByLabelText('Dia de fechamento'), { target: { value: '10' } })
-    fireEvent.change(within(dialog).getByLabelText('Dia de vencimento'), { target: { value: '15' } })
+    fireEvent.change(within(dialog).getByLabelText('Data de fechamento'), { target: { value: '2026-12-25' } })
+    fireEvent.change(within(dialog).getByLabelText('Data de vencimento'), { target: { value: '2027-01-01' } })
     fireEvent.click(within(dialog).getByRole('button', { name: 'Salvar cartão' }))
 
+    expect(screen.getByRole('heading', { name: 'Cartões' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Nubank' })).toBeInTheDocument()
     expect(screen.getAllByText(/1\.000,00/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/25 dez 2026/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/01 jan 2027/).length).toBeGreaterThan(0)
 
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as { cards: unknown[] }
     expect(saved.cards).toEqual([
-      expect.objectContaining({ name: 'Nubank', limitCents: 100_000, closingDay: 10, dueDay: 15 }),
+      expect.objectContaining({
+        name: 'Nubank',
+        limitCents: 100_000,
+        closingDay: 25,
+        dueDay: 1,
+        closingDate: '2026-12-25',
+        dueDate: '2027-01-01',
+      }),
     ])
   })
 
-  it('lança uma fatura manualmente e projeta as parcelas no fluxo de caixa', () => {
+  it('edita as datas do cartão sem gerar lançamentos no fluxo', () => {
+    const state = createInitialState(2026)
+    state.cards = [{ id: 'c1', name: 'Nubank', limitCents: 100_000, closingDay: 10, dueDay: 15 }]
+    state.cardInvoices = [{
+      id: 'c1:2026-12',
+      cardId: 'c1',
+      invoiceMonth: '2026-12',
+      items: [{ id: 'tv', description: 'TV', amountCents: 10_000, currentInstallment: 1, installmentCount: 2 }],
+      rawText: '',
+      sections: [],
+    }]
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+
+    render(<App />)
+    fireEvent.click(screen.getAllByRole('button', { name: 'Cartões' })[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Editar Nubank' }))
+
+    const dialog = screen.getByRole('dialog')
+    fireEvent.change(within(dialog).getByLabelText('Data de fechamento'), { target: { value: '2026-12-25' } })
+    fireEvent.change(within(dialog).getByLabelText('Data de vencimento'), { target: { value: '2027-01-01' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Salvar cartão' }))
+
+    expect(screen.getByRole('heading', { name: 'Cartões' })).toBeInTheDocument()
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as {
+      transactions: unknown[]
+      cards: Parameters<typeof buildInstallmentTransactions>[0][]
+      cardInvoices: Array<{
+        invoiceMonth: string
+        items: Parameters<typeof buildInstallmentTransactions>[1]
+      }>
+    }
+    expect(saved.transactions).toHaveLength(0)
+    const projections = buildInstallmentTransactions(
+      saved.cards[0],
+      saved.cardInvoices[0].items,
+      saved.cardInvoices[0].invoiceMonth,
+    )
+    expect(projections.map((item) => item.date)).toEqual(['2027-01-01', '2027-02-01'])
+  })
+
+  it('lança uma fatura manualmente sem alterar o fluxo de caixa', () => {
     const year = new Date().getFullYear()
     const state = createInitialState(year)
     state.initialBalanceCents = 100_000
@@ -524,15 +672,61 @@ describe('aplicação', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Salvar fatura e parcelas' }))
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    expect(screen.getAllByText(/980,00/).length).toBeGreaterThan(0)
+    expect(screen.getByRole('heading', { name: 'Cartões' })).toBeInTheDocument()
+    expect(screen.getAllByText(/20,00/).length).toBeGreaterThan(0)
 
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as {
-      transactions: Array<{ cardId?: string; installmentIndex?: number; description: string }>
+      transactions: unknown[]
+      cardInvoices: Array<{ cardId: string; invoiceMonth: string; items: Array<{ description: string }> }>
     }
-    expect(saved.transactions).toHaveLength(2)
-    expect(saved.transactions.map((item) => item.installmentIndex)).toEqual([1, 2])
-    expect(saved.transactions.every((item) => item.cardId === 'c1')).toBe(true)
-    expect(saved.transactions[0].description).toBe('Netflix (1/2)')
+    expect(saved.transactions).toHaveLength(0)
+    expect(saved.cardInvoices).toHaveLength(1)
+    expect(saved.cardInvoices[0]).toMatchObject({ cardId: 'c1' })
+    expect(saved.cardInvoices[0].items[0].description).toBe('Netflix')
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Fluxo' })[0])
+    expect(screen.getAllByText(/1\.000,00/).length).toBeGreaterThan(0)
+    expect(screen.queryByText(/980,00/)).not.toBeInTheDocument()
+  })
+
+  it('projeta parcelas no vencimento configurado após a virada de ano', () => {
+    const state = createInitialState(2026)
+    state.cards = [{
+      id: 'c1',
+      name: 'Nubank',
+      limitCents: 100_000,
+      closingDay: 25,
+      dueDay: 1,
+      closingDate: '2026-12-25',
+      dueDate: '2027-01-01',
+    }]
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+
+    render(<App />)
+    fireEvent.click(screen.getAllByRole('button', { name: 'Cartões' })[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Manual' }))
+
+    const dialog = screen.getByRole('dialog')
+    expect(within(dialog).getByLabelText('Vencimento')).toHaveValue('2027-01-01')
+    fireEvent.change(within(dialog).getByLabelText('Descrição'), { target: { value: 'TV' } })
+    fireEvent.change(within(dialog).getByLabelText('Valor da parcela (R$)'), { target: { value: '10,00' } })
+    fireEvent.change(within(dialog).getByLabelText('Total de parcelas'), { target: { value: '2' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Salvar fatura e parcelas' }))
+
+    expect(screen.getByRole('heading', { name: 'Cartões' })).toBeInTheDocument()
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as {
+      cards: Parameters<typeof buildInstallmentTransactions>[0][]
+      cardInvoices: Array<{
+        invoiceMonth: string
+        items: Parameters<typeof buildInstallmentTransactions>[1]
+      }>
+    }
+    const projections = buildInstallmentTransactions(
+      saved.cards[0],
+      saved.cardInvoices[0].items,
+      saved.cardInvoices[0].invoiceMonth,
+    )
+    expect(projections.map((item) => item.date)).toEqual(['2027-01-01', '2027-02-01'])
   })
 
   it('importa as linhas de um PDF e abre a conferência da fatura', async () => {
@@ -593,17 +787,35 @@ describe('aplicação', () => {
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'Salvar fatura e parcelas' }))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Cartões' })).toBeInTheDocument()
 
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as {
-      transactions: Array<{ date: string; description: string; cardId?: string; type?: string }>
+      transactions: unknown[]
+      cards: Parameters<typeof buildInstallmentTransactions>[0][]
+      cardInvoices: Array<{
+        cardId: string
+        invoiceMonth: string
+        fromMonth?: string
+        items: Parameters<typeof buildInstallmentTransactions>[1]
+      }>
     }
-    expect(saved.transactions).toHaveLength(1)
-    expect(saved.transactions[0]).toMatchObject({
-      description: 'NETFLIX (3/3)',
+    expect(saved.transactions).toHaveLength(0)
+    expect(saved.cardInvoices).toHaveLength(1)
+    expect(saved.cardInvoices[0]).toMatchObject({
       cardId: 'c1',
-      type: 'saida',
+      fromMonth: `${nextYear}-${String(nextMonth).padStart(2, '0')}`,
     })
-    expect(saved.transactions[0].date).toMatch(new RegExp(`^${nextYear}-${String(nextMonth).padStart(2, '0')}`))
+    expect(saved.cardInvoices[0].items).toHaveLength(1)
+
+    const projections = buildInstallmentTransactions(
+      saved.cards[0],
+      saved.cardInvoices[0].items,
+      saved.cardInvoices[0].invoiceMonth,
+      { fromMonth: saved.cardInvoices[0].fromMonth },
+    )
+    expect(projections).toHaveLength(1)
+    expect(projections[0]).toMatchObject({ description: 'NETFLIX (3/3)', type: 'saida' })
+    expect(projections[0].date).toMatch(new RegExp(`^${nextYear}-${String(nextMonth).padStart(2, '0')}`))
   })
 
   it('pede a senha quando o PDF exige e segue para a conferência após abrir', async () => {

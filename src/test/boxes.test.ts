@@ -51,6 +51,17 @@ describe('planejamento de meta da caixinha', () => {
     })
   })
 
+  it('aceita o prazo em mês/ano sem depender do dia alvo', () => {
+    expect(planBoxGoal({ ...box, targetDate: undefined, targetMonth: '2026-04' }, 20_000, '2026-01-15')).toEqual({
+      remainingCents: 60_000,
+      monthsRemaining: 3,
+      monthlyContributionCents: 20_000,
+      achieved: false,
+      overdue: false,
+      hasTargetDate: true,
+    })
+  })
+
   it('marca meta atingida e prazo vencido', () => {
     const achieved = planBoxGoal(box, 80_000, '2026-01-15')
     expect(achieved?.achieved).toBe(true)

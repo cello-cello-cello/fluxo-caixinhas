@@ -12,12 +12,14 @@ import { Graficos } from './components/Graficos'
 import { LancamentoModal } from './components/LancamentoModal'
 import { SenhaPdfModal } from './components/SenhaPdfModal'
 import { SummaryCards } from './components/SummaryCards'
+import { boxTargetMonth } from './lib/boxes'
 import { applyRecurrenceChange, calculateAnnualFlow, getCurrentPosition } from './lib/calc'
-import { isoDate, todayIso } from './lib/dates'
-import { buildInstallmentTransactions, parseInvoiceDocument } from './lib/invoices'
+import { daysInMonth, isoDate, todayIso } from './lib/dates'
+import { parseInvoiceDocument } from './lib/invoices'
 import type { InstallmentFilter, InvoiceItemDraft, InvoiceParseResult } from './lib/invoices'
 import { pdfPasswordIssue } from './lib/pdfPassword'
 import {
+  createDemoState,
   createId,
   createInitialState,
   downloadTextFile,
@@ -29,7 +31,7 @@ import {
   parseTransactionsCsv,
   saveState,
 } from './lib/storage'
-import type { AppState, Box, CreditCard, RecurrenceChange, Transaction, TransactionType } from './types'
+import type { AppState, Box, CardInvoice, CreditCard, RecurrenceChange, Transaction, TransactionType } from './types'
 
 type Tab = 'fluxo' | 'caixinhas' | 'cartoes' | 'graficos' | 'dados'
 
@@ -62,8 +64,67 @@ const TABS: { id: Tab; label: string; icon: typeof CalendarRange }[] = [
   { id: 'dados', label: 'Dados', icon: Database },
 ]
 
+function monthIndexOf(key: string): number {
+  const [year, month] = key.split('-').map(Number)
+  return year * 12 + month - 1
+}
+
+function monthKeyFromIndex(index: number): string {
+  const year = Math.floor(index / 12)
+  const month = (index % 12) + 1
+  return `${year}-${String(month).padStart(2, '0')}`
+}
+
+function buildAutoContribution(box: Box, stateYear: number): Transaction | null {
+  const amountCents = box.autoContributionCents ?? 0
+  if (amountCents <= 0) return null
+
+  const today = todayIso()
+  const currentYear = Number(today.slice(0, 4))
+  const day = Math.max(1, Math.min(31, box.autoContributionDay ?? 1))
+  const startYear = stateYear
+  const startMonth = stateYear === currentYear ? Number(today.slice(5, 7)) - 1 : 0
+  const targetMonth = boxTargetMonth(box)
+  let startIndex = startYear * 12 + startMonth
+  const targetIndex = targetMonth ? monthIndexOf(targetMonth) : null
+
+  if (targetIndex !== null && targetIndex < startIndex) return null
+  if (stateYear === currentYear && day < Number(today.slice(8, 10))) startIndex += 1
+  if (targetIndex !== null && startIndex > targetIndex) {
+    const date = isoDate(startYear, startMonth, Math.min(day, daysInMonth(startYear, startMonth)))
+    return {
+      id: `auto-${box.id}`,
+      date,
+      description: `Aporte automático · ${box.name}`,
+      category: 'Caixinhas',
+      type: 'guardar',
+      amountCents,
+      boxId: box.id,
+      autoBoxId: box.id,
+    }
+  }
+
+  const startKey = monthKeyFromIndex(startIndex)
+  const [year, month] = startKey.split('-').map(Number)
+  const recurring = targetIndex === null || targetIndex > startIndex
+
+  return {
+    id: `auto-${box.id}`,
+    date: isoDate(year, month - 1, 1),
+    description: `Aporte automático · ${box.name}`,
+    category: 'Caixinhas',
+    type: 'guardar',
+    amountCents,
+    boxId: box.id,
+    autoBoxId: box.id,
+    recurrenceDay: recurring ? day : undefined,
+    recurrenceEnd: recurring ? targetMonth ?? undefined : undefined,
+  }
+}
+
 export default function App() {
   const [state, setState] = useState<AppState>(() => loadState())
+  const [demoBackup, setDemoBackup] = useState<AppState | null>(null)
   const [tab, setTab] = useState<Tab>('fluxo')
   const [viewMode, setViewMode] = useState<ViewMode>('month')
   const [focusedMonth, setFocusedMonth] = useState(() => new Date().getMonth())
@@ -74,7 +135,10 @@ export default function App() {
   const [passwordDraft, setPasswordDraft] = useState<PasswordDraft | null>(null)
   const [toast, setToast] = useState<string | null>(null)
 
-  useEffect(() => saveState(state), [state])
+  useEffect(() => {
+    if (demoBackup) return
+    saveState(state)
+  }, [state, demoBackup])
 
   useEffect(() => {
     if (!toast) return
@@ -113,13 +177,17 @@ export default function App() {
   }
 
   function saveTransaction(transaction: Transaction, change?: RecurrenceChange) {
+    const normalized: Transaction = {
+      ...transaction,
+      autoBoxId: transaction.type === 'guardar' ? transaction.autoBoxId : undefined,
+    }
     setState((previous) => ({
       ...previous,
       transactions: change
-        ? applyRecurrenceChange(previous.transactions, change, transaction)
-        : previous.transactions.some((item) => item.id === transaction.id)
-          ? previous.transactions.map((item) => (item.id === transaction.id ? transaction : item))
-          : [...previous.transactions, transaction],
+        ? applyRecurrenceChange(previous.transactions, change, normalized)
+        : previous.transactions.some((item) => item.id === normalized.id)
+          ? previous.transactions.map((item) => (item.id === normalized.id ? normalized : item))
+          : [...previous.transactions, normalized],
     }))
     setToast(
       change?.scope === 'single'
@@ -149,23 +217,39 @@ export default function App() {
   }
 
   function saveBox(box: Box) {
-    setState((previous) => ({
-      ...previous,
-      boxes: previous.boxes.some((item) => item.id === box.id)
-        ? previous.boxes.map((item) => (item.id === box.id ? box : item))
-        : [...previous.boxes, box],
-    }))
+    setState((previous) => {
+      const generated = buildAutoContribution(box, previous.year)
+      return {
+        ...previous,
+        boxes: previous.boxes.some((item) => item.id === box.id)
+          ? previous.boxes.map((item) => (item.id === box.id ? box : item))
+          : [...previous.boxes, box],
+        transactions: [
+          ...previous.transactions.filter((item) => item.autoBoxId !== box.id),
+          ...(generated ? [generated] : []),
+        ],
+      }
+    })
     setBoxDraft(null)
     setToast('Caixinha salva.')
   }
 
+  function useBestDepositDay(box: Box, day: number, amountCents: number) {
+    saveBox({ ...box, autoContributionCents: amountCents, autoContributionDay: day })
+    setToast(`Aporte automático ajustado para o dia ${day}.`)
+  }
+
   function deleteBox(id: string) {
-    if (state.transactions.some((transaction) => transaction.boxId === id)) {
+    if (state.transactions.some((transaction) => transaction.boxId === id && transaction.autoBoxId !== id)) {
       setBoxDraft(null)
       setToast('Não foi possível excluir: existem lançamentos vinculados a esta caixinha.')
       return
     }
-    setState((previous) => ({ ...previous, boxes: previous.boxes.filter((box) => box.id !== id) }))
+    setState((previous) => ({
+      ...previous,
+      boxes: previous.boxes.filter((box) => box.id !== id),
+      transactions: previous.transactions.filter((transaction) => transaction.boxId !== id),
+    }))
     setBoxDraft(null)
     setToast('Caixinha excluída.')
   }
@@ -178,17 +262,19 @@ export default function App() {
         : [...previous.cards, card],
     }))
     setCardDraft(null)
-    setToast('Cartão salvo.')
+    setTab('cartoes')
+    setToast('Cartão salvo na aba Cartões.')
   }
 
   function deleteCard(id: string) {
     setState((previous) => ({
       ...previous,
       cards: previous.cards.filter((card) => card.id !== id),
-      transactions: previous.transactions.filter((transaction) => transaction.cardId !== id),
+      cardInvoices: previous.cardInvoices.filter((invoice) => invoice.cardId !== id),
     }))
     setCardDraft(null)
-    setToast('Cartão excluído e parcelas removidas.')
+    setTab('cartoes')
+    setToast('Cartão excluído e faturas removidas.')
   }
 
   function openInvoice(card: CreditCard, invoiceMonth: string, parsed: InvoiceParseResult) {
@@ -251,24 +337,47 @@ export default function App() {
   function saveInvoice(items: InvoiceItemDraft[], filter: InstallmentFilter) {
     if (!invoiceDraft) return
     const { card, invoiceMonth } = invoiceDraft
-    const generated = buildInstallmentTransactions(card, items, invoiceMonth, filter)
+    const invoice: CardInvoice = {
+      id: `${card.id}:${invoiceMonth}`,
+      cardId: card.id,
+      invoiceMonth,
+      items,
+      rawText: invoiceDraft.rawText,
+      sections: invoiceDraft.sections,
+      fromMonth: filter.fromMonth,
+    }
 
     setState((previous) => ({
       ...previous,
-      transactions: [
-        ...previous.transactions.filter(
-          (item) => !(item.cardId === card.id && item.invoiceMonth === invoiceMonth && item.installmentGroupId),
+      cardInvoices: [
+        ...previous.cardInvoices.filter(
+          (item) => !(item.cardId === card.id && item.invoiceMonth === invoiceMonth),
         ),
-        ...generated,
+        invoice,
       ],
     }))
     setInvoiceDraft(null)
-    setToast(`${generated.length} lançamento(s) salvo(s) no fluxo de caixa.`)
+    setTab('cartoes')
+    setToast(`${items.length} lançamento(s) salvo(s) apenas na aba Cartões.`)
   }
 
   function updateSettings(year: number, initialBalanceCents: number) {
     setState((previous) => ({ ...previous, year, initialBalanceCents }))
     setToast('Configurações salvas.')
+  }
+
+  function toggleDemo() {
+    if (demoBackup) {
+      setState(demoBackup)
+      setDemoBackup(null)
+      setFocusedMonth(new Date().getMonth())
+      setToast('Você voltou aos seus dados.')
+      return
+    }
+    setDemoBackup(state)
+    setState(createDemoState(new Date().getFullYear()))
+    setFocusedMonth(new Date().getMonth())
+    setToast('Modo demonstração ativado. Seus dados ficaram preservados.')
   }
 
   async function importJson(file: File) {
@@ -300,6 +409,7 @@ export default function App() {
 
   function reset() {
     setState(createInitialState())
+    setDemoBackup(null)
     setFocusedMonth(new Date().getMonth())
     setDraft(null)
     setBoxDraft(null)
@@ -310,9 +420,9 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-white text-slate-900">
-      <header className="sticky top-0 z-20 border-b border-slate-100 bg-white/85 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3.5">
+    <div className="min-h-screen bg-[#F5F7FA] text-slate-900">
+      <header className="sticky top-0 z-20 border-b border-[#E6EAF0] bg-white/90 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3.5 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
             <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-navy shadow-lift">
               <WaveMark />
@@ -320,7 +430,7 @@ export default function App() {
             <h1 className="truncate text-lg font-extrabold leading-tight tracking-tight">Fluxo</h1>
           </div>
 
-          <div className="flex items-center gap-1 rounded-2xl border border-slate-100 bg-slate-50/70 p-1">
+          <div className="flex items-center gap-1 rounded-2xl border border-[#E6EAF0] bg-white p-1 shadow-soft">
             <button
               type="button"
               onClick={() => changeYear(-1)}
@@ -342,8 +452,8 @@ export default function App() {
         </div>
       </header>
 
-      <nav className="sticky top-[73px] z-10 hidden border-b border-slate-100 bg-white/85 backdrop-blur-xl sm:block" aria-label="Navegação principal">
-        <div className="mx-auto flex max-w-6xl gap-1 px-4">
+      <nav className="sticky top-[73px] z-10 hidden border-b border-[#E6EAF0] bg-white/90 backdrop-blur-xl sm:block" aria-label="Navegação principal">
+        <div className="mx-auto flex max-w-6xl gap-1 px-4 sm:px-6">
           {TABS.map((item) => {
             const Icon = item.icon
             return (
@@ -352,7 +462,7 @@ export default function App() {
                 type="button"
                 onClick={() => setTab(item.id)}
                 aria-current={tab === item.id ? 'page' : undefined}
-                className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-bold transition ${
+                className={`flex items-center gap-2 border-b-2 px-4 py-3.5 text-sm font-bold transition ${
                   tab === item.id ? 'border-navy text-navy' : 'border-transparent text-slate-400 hover:text-slate-700'
                 }`}
               >
@@ -363,7 +473,7 @@ export default function App() {
         </div>
       </nav>
 
-      <main className="mx-auto max-w-6xl space-y-4 px-4 pb-28 pt-5 sm:pb-12">
+      <main className="mx-auto max-w-6xl space-y-5 px-4 pb-32 pt-6 sm:px-6 sm:pb-12">
         {tab === 'fluxo' && (
           <>
             <SummaryCards flow={flow} position={position} />
@@ -392,6 +502,7 @@ export default function App() {
               if (box) setBoxDraft({ box })
             }}
             onTransfer={openTransfer}
+            onUseBestDay={useBestDepositDay}
           />
         )}
 
@@ -414,6 +525,8 @@ export default function App() {
         {tab === 'dados' && (
           <Dados
             state={state}
+            demoActive={demoBackup !== null}
+            onToggleDemo={toggleDemo}
             onSettings={updateSettings}
             onImportJson={importJson}
             onImportCsv={importCsv}
@@ -431,7 +544,7 @@ export default function App() {
         )}
       </main>
 
-      <nav className="safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-slate-100 bg-white/90 backdrop-blur-xl sm:hidden" aria-label="Navegação principal">
+      <nav className="safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-[#E6EAF0] bg-white/95 backdrop-blur-xl sm:hidden" aria-label="Navegação principal">
         <div className="mx-auto grid max-w-md grid-cols-5">
           {TABS.map((item) => {
             const Icon = item.icon
@@ -441,7 +554,7 @@ export default function App() {
                 type="button"
                 onClick={() => setTab(item.id)}
                 aria-current={tab === item.id ? 'page' : undefined}
-                className={`flex flex-col items-center gap-1 py-2.5 text-[10px] font-bold transition ${
+                className={`flex min-h-[56px] flex-col items-center gap-1 py-3 text-[10px] font-bold transition ${
                   tab === item.id ? 'text-navy' : 'text-slate-400'
                 }`}
               >
@@ -513,7 +626,7 @@ export default function App() {
       {toast && (
         <div
           role="status"
-          className="fixed bottom-24 left-1/2 z-[60] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-2xl bg-slate-900 px-4 py-3 text-center text-xs font-semibold text-white shadow-2xl sm:bottom-6"
+          className="fixed bottom-28 left-1/2 z-[60] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-[16px] bg-[#0F2942] px-4 py-3 text-center text-xs font-semibold text-white shadow-lift sm:bottom-6"
         >
           {toast}
         </div>

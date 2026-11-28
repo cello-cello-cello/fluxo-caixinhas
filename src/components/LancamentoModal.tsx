@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { ArrowDownLeft, ArrowUpRight, Pencil, PiggyBank, Trash2, Undo2, X } from 'lucide-react'
 import { availableFor, expandTransactions, occurrenceMonthKey, resolveBaseId } from '../lib/calc'
-import { CATEGORIES, categoryColor, CHART_COLORS, TRANSACTION_TYPES } from '../lib/constants'
-import { formatDate, isoDate, MONTH_NAMES, parseIsoDate, previousBusinessDayIso } from '../lib/dates'
+import { CATEGORIES, TRANSACTION_TYPES } from '../lib/constants'
+import { formatDate, formatFriendlyDate, isoDate, MONTH_NAMES, parseIsoDate, previousBusinessDayIso } from '../lib/dates'
 import { centsToInput, formatBRL, formatBRLCompact, parseAmountToCents } from '../lib/money'
 import { createId } from '../lib/storage'
 import type { AppState, RecurrenceChange, RecurrenceScope, Transaction, TransactionType } from '../types'
@@ -29,6 +29,13 @@ const TYPE_ICONS: Record<TransactionType, typeof ArrowDownLeft> = {
 const TYPE_LABELS = Object.fromEntries(
   TRANSACTION_TYPES.map((option) => [option.value, option.label]),
 ) as Record<TransactionType, string>
+
+const SHORT_TYPE_LABELS: Record<TransactionType, string> = {
+  entrada: 'Entrada',
+  saida: 'Saída',
+  guardar: 'Guardar',
+  resgatar: 'Resgatar',
+}
 
 const TYPE_STYLES: Record<TransactionType, { active: string; idle: string; surface: string; text: string }> = {
   entrada: {
@@ -230,6 +237,7 @@ export function LancamentoModal({
         recurrenceDay: repeatMonthly ? recurrenceDay ?? parsedDate.day : undefined,
         recurrenceEnd: repeatMonthly ? finalEnd : undefined,
         adjustToBusinessDay,
+        autoBoxId: isTransfer && initialBase?.autoBoxId ? initialBase.autoBoxId : undefined,
       },
       editingChange(),
     )
@@ -289,7 +297,7 @@ export function LancamentoModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/35 p-0 backdrop-blur-sm sm:items-center sm:p-6"
+      className="modal-backdrop sm:items-center sm:p-6"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose()
       }}
@@ -298,23 +306,24 @@ export function LancamentoModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="lancamento-title"
-        className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-4xl bg-white p-5 shadow-2xl sm:rounded-4xl sm:p-7"
+        className="modal-card max-w-lg sm:rounded-[20px]"
       >
-        <header className="mb-4 flex items-start justify-between gap-3">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.16em] text-navy">
-              {editingId ? (repeatMonthly ? 'Editar série recorrente' : 'Editar lançamento') : 'Painel do dia'}
-            </p>
-            <h2 id="lancamento-title" className="money mt-1 text-xl font-extrabold text-slate-900">
-              {state.year} · {date.slice(5).replace('-', '/')}
-            </h2>
+        <header className="modal-header sm:px-6">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 id="lancamento-title" className="text-lg font-extrabold leading-tight text-slate-900 sm:text-xl">
+                {formatFriendlyDate(date)}
+              </h2>
+              {editingId && <span className="chip bg-navy-soft text-navy">Editando</span>}
+            </div>
           </div>
-          <button type="button" onClick={onClose} aria-label="Fechar" className="grid h-9 w-9 place-items-center rounded-full bg-slate-50 text-slate-500 transition hover:bg-slate-100">
+          <button type="button" onClick={onClose} aria-label="Fechar" className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-slate-50 text-slate-500 transition hover:bg-slate-100">
             <X size={18} />
           </button>
         </header>
 
-        <section className="mb-5 rounded-2xl border border-slate-100 bg-slate-50/70 p-3">
+        <form id="lancamento-form" onSubmit={handleSubmit} className="modal-body space-y-4 sm:px-6">
+          <section className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3">
           <div className="flex items-center justify-between gap-2">
             <h3 className="text-xs font-extrabold uppercase tracking-wide text-slate-500">Lançamentos deste dia</h3>
             <span className="chip bg-white text-navy">
@@ -348,8 +357,8 @@ export function LancamentoModal({
                 const itemEnd = item.recurrenceEnd ?? defaultRecurrenceEnd(base?.date ?? item.date)
 
                 return (
-                  <li key={item.id} className={`flex items-center gap-2 py-2.5 ${editingId === item.id ? 'rounded-xl bg-[#E9EFF5] px-2' : ''}`}>
-                    <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${style.surface}`}>
+                  <li key={item.id} className={`flex items-center gap-2 py-2 ${editingId === item.id ? 'rounded-xl bg-[#E9EFF5] px-2' : ''}`}>
+                    <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-xl ${style.surface}`}>
                       <Icon size={16} />
                     </span>
                     <div className="min-w-0 flex-1">
@@ -369,33 +378,30 @@ export function LancamentoModal({
                       onClick={() => startEdit(item)}
                       aria-label={`Editar ${item.description}`}
                       aria-pressed={editingId === item.id}
-                      className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-white text-[#1E3A5F] ring-1 ring-slate-200 transition hover:bg-[#E9EFF5]"
+                      className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white text-[#1E3A5F] ring-1 ring-slate-200 transition hover:bg-[#E9EFF5]"
                     >
-                      <Pencil size={15} />
+                      <Pencil size={14} />
                     </button>
                     <button
                       type="button"
                       onClick={() => deleteFromList(item)}
                       aria-label={pending ? `Confirmar exclusão de ${item.description}` : `Excluir ${item.description}`}
-                      className={`inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-xl px-2.5 text-xs font-extrabold transition ${
+                      title={pending ? 'Confirmar exclusão' : 'Excluir'}
+                      className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl transition ${
                         pending
                           ? 'bg-[#0F2942] text-white shadow-md ring-2 ring-[#0F2942] ring-offset-2'
                           : 'bg-white text-slate-500 ring-1 ring-slate-200 hover:bg-slate-50 hover:text-[#0F2942]'
                       }`}
                     >
-                      {pending ? <><Trash2 size={14} /> Confirmar</> : <Trash2 size={16} />}
+                      <Trash2 size={15} />
                     </button>
                   </li>
                 )
               })}
             </ul>
           )}
-          <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
-            Cada exclusão recalcula o dia, os meses seguintes e toda a cascata de saldos.
-          </p>
-        </section>
+          </section>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <span className="label">Tipo</span>
             <div className="grid grid-cols-2 gap-2">
@@ -412,10 +418,10 @@ export function LancamentoModal({
                       setError(null)
                     }}
                     aria-pressed={active}
-                    className={`flex min-h-[54px] items-center gap-2 rounded-2xl border px-3 py-2.5 text-left text-[11px] font-bold transition ${active ? style.active : style.idle}`}
+                    className={`flex min-h-[48px] items-center gap-2 rounded-2xl border px-3 py-2 text-left text-xs font-bold transition ${active ? style.active : style.idle}`}
                   >
-                    <Icon size={17} className="shrink-0" />
-                    <span className="leading-tight">{option.label}</span>
+                    <Icon size={16} className="shrink-0" />
+                    <span className="leading-tight">{SHORT_TYPE_LABELS[option.value]}</span>
                   </button>
                 )
               })}
@@ -460,61 +466,65 @@ export function LancamentoModal({
           </div>
 
           <div className="space-y-2">
-            <label
-              className="flex cursor-pointer items-start gap-3 rounded-2xl border border-[#1E3A5F]/15 bg-[#E9EFF5]/60 p-3.5 transition hover:border-[#1E3A5F]/40"
-              htmlFor="lancamento-recorrencia"
-            >
-              <input
-                id="lancamento-recorrencia"
-                aria-label="Repetir todo mês no dia selecionado"
-                type="checkbox"
-                className="mt-0.5 h-4 w-4 shrink-0 accent-[#1E3A5F]"
-                checked={repeatMonthly}
-                onChange={(event) => setRepeatMonthly(event.target.checked)}
-              />
-              <span>
-                <span className="block text-sm font-bold text-slate-800">Repetir todo mês no dia selecionado</span>
-                <span className="mt-0.5 block text-[11px] leading-relaxed text-slate-500">
-                  Escolha o último mês em Repetir até. Em meses curtos, usa o último dia válido (28/29/30).
-                  {adjustToBusinessDay ? ' Fins de semana são antecipados para sexta.' : ''}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-[#1E3A5F]/15 bg-[#E9EFF5]/60 px-3 py-2">
+              <label className="flex cursor-pointer items-center gap-2 text-sm font-bold text-slate-800" htmlFor="lancamento-recorrencia">
+                <input
+                  id="lancamento-recorrencia"
+                  aria-label="Repetir mensalmente"
+                  type="checkbox"
+                  className="h-4 w-4 shrink-0 accent-[#1E3A5F]"
+                  checked={repeatMonthly}
+                  onChange={(event) => setRepeatMonthly(event.target.checked)}
+                />
+                Repetir mensalmente
+              </label>
+              <label className="flex cursor-pointer items-center gap-2 text-sm font-bold text-slate-800" htmlFor="lancamento-dia-util">
+                <input
+                  id="lancamento-dia-util"
+                  aria-label="Antecipar se cair no fim de semana"
+                  type="checkbox"
+                  className="h-4 w-4 shrink-0 accent-[#1E3A5F]"
+                  checked={adjustToBusinessDay}
+                  onChange={(event) => setAdjustToBusinessDay(event.target.checked)}
+                />
+                Antecipar se cair no fim de semana
+              </label>
+              {adjustToBusinessDay && (
+                <span className="money text-[11px] font-bold text-[#1E3A5F]">
+                  Data efetiva: {formatDate(effectiveDate)}
                 </span>
-              </span>
-            </label>
+              )}
+            </div>
 
             {repeatMonthly && (
-              <div className="grid grid-cols-2 gap-2 rounded-2xl border border-[#1E3A5F]/15 bg-white p-3.5">
-                <div>
-                  <span className="label">Repetir até</span>
-                  <select
-                    aria-label="Mês final da recorrência"
-                    className="field mt-1"
-                    value={endMonth}
-                    onChange={(event) => setEndMonth(Number(event.target.value))}
-                  >
-                    {MONTH_NAMES.map((name, index) => (
-                      <option key={name} value={index}>{name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <span className="label">Ano final</span>
-                  <select
-                    aria-label="Ano final da recorrência"
-                    className="field mt-1"
-                    value={endYear}
-                    onChange={(event) => setEndYear(Number(event.target.value))}
-                  >
-                    {(() => {
-                      const firstYear = Math.min(endYear, parseIsoDate(date)?.year ?? state.year)
-                      const count = Math.max(21, endYear - firstYear + 1)
-                      return Array.from({ length: count }, (_, index) => firstYear + index)
-                        .filter((year) => year <= 2200)
-                        .map((year) => (
-                          <option key={year} value={year}>{year}</option>
-                        ))
-                    })()}
-                  </select>
-                </div>
+              <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-[#1E3A5F]/15 bg-white px-3 py-2">
+                <span className="text-xs font-bold text-slate-500">Repetir até:</span>
+                <select
+                  aria-label="Mês final da recorrência"
+                  className="field !w-auto !py-1.5 text-xs"
+                  value={endMonth}
+                  onChange={(event) => setEndMonth(Number(event.target.value))}
+                >
+                  {MONTH_NAMES.map((name, index) => (
+                    <option key={name} value={index}>{name}</option>
+                  ))}
+                </select>
+                <select
+                  aria-label="Ano final da recorrência"
+                  className="field !w-auto !py-1.5 text-xs"
+                  value={endYear}
+                  onChange={(event) => setEndYear(Number(event.target.value))}
+                >
+                  {(() => {
+                    const firstYear = Math.min(endYear, parseIsoDate(date)?.year ?? state.year)
+                    const count = Math.max(21, endYear - firstYear + 1)
+                    return Array.from({ length: count }, (_, index) => firstYear + index)
+                      .filter((year) => year <= 2200)
+                      .map((year) => (
+                        <option key={year} value={year}>{year}</option>
+                      ))
+                  })()}
+                </select>
               </div>
             )}
 
@@ -552,30 +562,6 @@ export function LancamentoModal({
               </fieldset>
             )}
 
-            <label
-              className="flex cursor-pointer items-start gap-3 rounded-2xl border border-[#1E3A5F]/15 bg-white p-3.5 transition hover:border-[#1E3A5F]/40"
-              htmlFor="lancamento-dia-util"
-            >
-              <input
-                id="lancamento-dia-util"
-                aria-label="Antecipar se cair em sábado ou domingo"
-                type="checkbox"
-                className="mt-0.5 h-4 w-4 shrink-0 accent-[#1E3A5F]"
-                checked={adjustToBusinessDay}
-                onChange={(event) => setAdjustToBusinessDay(event.target.checked)}
-              />
-              <span>
-                <span className="block text-sm font-bold text-slate-800">Antecipar se cair em sábado ou domingo</span>
-                <span className="mt-0.5 block text-[11px] leading-relaxed text-slate-500">
-                  Sábado vira sexta; domingo vira sexta da semana anterior. Vale para o lançamento único e para a recorrência.
-                </span>
-                {adjustToBusinessDay && (
-                  <span className="money mt-1 block text-[11px] font-bold text-[#1E3A5F]">
-                    Data efetiva: {formatDate(effectiveDate)}
-                  </span>
-                )}
-              </span>
-            </label>
           </div>
 
           <div>
@@ -607,19 +593,6 @@ export function LancamentoModal({
                 <option key={item} value={item} />
               ))}
             </datalist>
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <span
-                className="chip border border-slate-100 bg-white"
-                style={{ color: isTransfer ? CHART_COLORS.navy : categoryColor(category) }}
-              >
-                <i
-                  className="h-2 w-2 rounded-full"
-                  style={{ backgroundColor: isTransfer ? CHART_COLORS.navy : categoryColor(category) }}
-                />
-                {isTransfer ? 'Caixinhas' : category || 'Sem categoria'}
-              </span>
-              <span className="text-[11px] text-slate-400">Cor usada nos gráficos</span>
-            </div>
           </div>
 
           {isTransfer && (
@@ -658,34 +631,37 @@ export function LancamentoModal({
             </p>
           )}
 
-          <div className="flex flex-col gap-2 pt-2 sm:flex-row-reverse">
-            <button type="submit" className="btn-primary min-h-12 w-full sm:w-auto">
-              {editingId ? 'Salvar alterações' : 'Adicionar ao dia'}
-            </button>
-            {editingId && (
-              <button
-                type="button"
-                onClick={() => {
-                  if (!confirmDelete) {
-                    setConfirmDelete(true)
-                    return
-                  }
-                  onDelete(editingId ?? '', true, editingChange())
-                }}
-                className={`inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border-2 px-4 py-3 text-sm font-extrabold transition sm:w-auto ${
-                  confirmDelete
-                    ? 'border-[#0F2942] bg-[#0F2942] text-white shadow-lift'
-                    : 'border-slate-200 text-slate-600 hover:border-[#0F2942] hover:text-[#0F2942]'
-                }`}
-              >
-                <Trash2 size={16} /> {confirmDelete ? 'Confirmar exclusão' : 'Excluir'}
-              </button>
-            )}
-            <button type="button" onClick={onClose} className="btn-soft min-h-12 w-full sm:w-auto">
+        </form>
+
+        <footer className="modal-footer sm:px-6">
+          <div className="flex gap-2">
+            <button type="button" onClick={onClose} className="btn-soft min-h-11 flex-1">
               Fechar
             </button>
+            <button type="submit" form="lancamento-form" className="btn-primary min-h-11 flex-[2]">
+              {editingId ? 'Salvar alterações' : 'Adicionar ao dia'}
+            </button>
           </div>
-        </form>
+          {editingId && (
+            <button
+              type="button"
+              onClick={() => {
+                if (!confirmDelete) {
+                  setConfirmDelete(true)
+                  return
+                }
+                onDelete(editingId ?? '', true, editingChange())
+              }}
+              className={`mt-2 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl border-2 px-4 py-2.5 text-sm font-extrabold transition ${
+                confirmDelete
+                  ? 'border-[#0F2942] bg-[#0F2942] text-white shadow-lift'
+                  : 'border-slate-200 text-slate-600 hover:border-[#0F2942] hover:text-[#0F2942]'
+              }`}
+            >
+              <Trash2 size={16} /> {confirmDelete ? 'Confirmar exclusão' : 'Excluir'}
+            </button>
+          )}
+        </footer>
       </div>
     </div>
   )

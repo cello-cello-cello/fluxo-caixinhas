@@ -37,7 +37,7 @@ function parseSignedAmount(raw: string): number | null {
 
 export function FaturaImportModal({ card, invoiceMonth, items, rawText, onClose, onSave }: FaturaImportModalProps) {
   const [year, month] = invoiceMonth.split('-').map(Number)
-  const defaultDueDate = installmentDueDate(card, year, Math.max(0, month - 1))
+  const defaultDueDate = card.dueDate ?? installmentDueDate(card, year, Math.max(0, month - 1))
   const [rows, setRows] = useState<DraftRow[]>(() => items.map((item) => ({
     ...item,
     amountInput: centsToInput(item.amountCents),
@@ -148,20 +148,20 @@ export function FaturaImportModal({ card, invoiceMonth, items, rawText, onClose,
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/35 backdrop-blur-sm sm:items-center sm:p-6"
+      className="modal-backdrop sm:items-center sm:p-6"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose()
       }}
     >
-      <div role="dialog" aria-modal="true" aria-labelledby="fatura-title" className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-t-4xl bg-white p-5 shadow-2xl sm:rounded-4xl sm:p-7">
-        <header className="mb-5 flex items-start justify-between gap-3">
+      <div role="dialog" aria-modal="true" aria-labelledby="fatura-title" className="modal-card max-w-3xl sm:rounded-[20px]">
+        <header className="modal-header sm:px-6">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.16em] text-navy">Conferência da fatura</p>
+            <p className="modal-kicker">Conferência da fatura</p>
             <h2 id="fatura-title" className="mt-1 text-xl font-extrabold text-slate-900">
               {card.name} · {invoiceMonth}
             </h2>
             <p className="mt-1 text-xs text-slate-500">
-              Confira os dados antes de salvar. As parcelas restantes são projetadas no dia {card.dueDay} de cada mês.
+              {card.dueDate ? 'Parcelas no vencimento configurado.' : `Parcelas restantes no dia ${card.dueDay} de cada mês.`}
             </p>
           </div>
           <button type="button" onClick={onClose} aria-label="Fechar" className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-slate-50 text-slate-500 transition hover:bg-slate-100">
@@ -169,7 +169,7 @@ export function FaturaImportModal({ card, invoiceMonth, items, rawText, onClose,
           </button>
         </header>
 
-        <form onSubmit={handleSubmit} className="space-y-3">
+        <form id="fatura-form" onSubmit={handleSubmit} className="modal-body space-y-3 sm:px-6">
           <div className="rounded-2xl border border-navy/10 bg-navy-soft/50 p-3">
             <label className="flex cursor-pointer items-start gap-2 text-sm font-bold text-slate-800">
               <input
@@ -327,12 +327,14 @@ export function FaturaImportModal({ card, invoiceMonth, items, rawText, onClose,
           {error && (
             <p role="alert" className="rounded-2xl bg-navy-soft px-4 py-3 text-sm font-semibold text-navy">{error}</p>
           )}
-
-          <div className="flex flex-col gap-2 pt-2 sm:flex-row-reverse">
-            <button type="submit" className="btn-primary w-full sm:w-auto">Salvar fatura e parcelas</button>
-            <button type="button" onClick={onClose} className="btn-soft w-full sm:w-auto">Cancelar</button>
-          </div>
         </form>
+
+        <footer className="modal-footer sm:px-6">
+          <div className="flex gap-2">
+            <button type="button" onClick={onClose} className="btn-soft min-h-11 flex-1">Cancelar</button>
+            <button type="submit" form="fatura-form" className="btn-primary min-h-11 flex-[2]">Salvar fatura e parcelas</button>
+          </div>
+        </footer>
       </div>
     </div>
   )

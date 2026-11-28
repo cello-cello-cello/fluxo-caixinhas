@@ -1,17 +1,8 @@
-import { daysInMonth, isoDate, previousBusinessDayIso } from './dates'
+import { daysInMonth, isoDate, parseIsoDate, previousBusinessDayIso } from './dates'
 import { parseAmountToCents } from './money'
-import type { AppState, CreditCard, Transaction } from '../types'
+import type { AppState, CardInvoiceItem, CreditCard, Transaction } from '../types'
 
-export interface InvoiceItemDraft {
-  id: string
-  description: string
-  amountCents: number
-  currentInstallment: number
-  installmentCount: number
-  purchaseDate?: string
-  dueDate?: string
-  source?: string
-}
+export type InvoiceItemDraft = CardInvoiceItem
 
 export interface InvoiceParseResult {
   items: InvoiceItemDraft[]
@@ -170,10 +161,28 @@ export function parseInvoiceLines(lines: string[], invoiceMonth: string): Invoic
   return parseInvoiceDocument(lines, invoiceMonth).items
 }
 
-export function installmentDueDate(card: CreditCard, year: number, month: number): string {
-  const limit = daysInMonth(year, month)
-  const day = Math.max(1, Math.min(card.dueDay, limit))
-  return previousBusinessDayIso(isoDate(year, month, day))
+export function installmentDueDate(card: CreditCard, year: number, month: number, offset = 0): string {
+  const target = year * 12 + month + offset
+  const targetYear = Math.floor(target / 12)
+  const targetMonth = target % 12
+  const day = Math.max(1, Math.min(card.dueDay, daysInMonth(targetYear, targetMonth)))
+  return previousBusinessDayIso(isoDate(targetYear, targetMonth, day))
+}
+
+export function cardDueDate(card: CreditCard, invoiceMonth: string, offset = 0): string {
+  const explicit = card.dueDate ? parseIsoDate(card.dueDate) : null
+  if (explicit) {
+    const target = explicit.year * 12 + explicit.month + offset
+    const targetYear = Math.floor(target / 12)
+    const targetMonth = target % 12
+    const day = Math.max(1, Math.min(explicit.day, daysInMonth(targetYear, targetMonth)))
+    return previousBusinessDayIso(isoDate(targetYear, targetMonth, day))
+  }
+
+  const parts = invoiceParts(invoiceMonth)
+  const now = new Date()
+  const base = parts ?? { year: now.getFullYear(), month: now.getMonth() }
+  return installmentDueDate(card, base.year, base.month, offset)
 }
 
 export function buildInstallmentTransactions(
@@ -194,10 +203,10 @@ export function buildInstallmentTransactions(
     const transactions: Transaction[] = []
 
     for (let installment = current; installment <= count; installment += 1) {
-      const index = parts.year * 12 + parts.month + installment - current
-      const year = Math.floor(index / 12)
-      const month = index % 12
-      const date = installment === current && item.dueDate ? item.dueDate : installmentDueDate(card, year, month)
+      const explicitDate = item.dueDate ? parseIsoDate(item.dueDate) : null
+      const date = installment === current && explicitDate
+        ? item.dueDate as string
+        : cardDueDate(card, invoiceMonth, installment - current)
       if (fromMonth && date.slice(0, 7) < fromMonth) continue
 
       transactions.push({
@@ -234,13 +243,18 @@ export function cardCommitment(
   today = new Date(),
 ): { committedCents: number; availableCents: number; openInstallments: number; exceeded: boolean } {
   const card = state.cards.find((item) => item.id === cardId)
+  if (!card) return { committedCents: 0, availableCents: 0, openInstallments: 0, exceeded: false }
+
   const start = isoDate(today.getFullYear(), today.getMonth(), 1)
-  const open = state.transactions.filter((item) => item.cardId === cardId && item.date >= start)
+  const open = state.cardInvoices
+    .filter((invoice) => invoice.cardId === cardId)
+    .flatMap((invoice) => buildInstallmentTransactions(card, invoice.items, invoice.invoiceMonth, { fromMonth: invoice.fromMonth }))
+    .filter((item) => item.date >= start)
   const committedCents = open.reduce(
     (sum, item) => sum + (item.type === 'entrada' ? -item.amountCents : item.amountCents),
     0,
   )
-  const limitCents = card?.limitCents ?? 0
+  const limitCents = card.limitCents
 
   return {
     committedCents,

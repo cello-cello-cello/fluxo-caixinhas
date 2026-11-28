@@ -59,14 +59,14 @@ export function Graficos({ state, flow }: GraficosProps) {
   const periodLabel = period === 'anual' ? `Ano de ${state.year}` : `${MONTH_NAMES[month]} de ${state.year}`
   const periodControl = (
     <div className="flex flex-wrap items-center gap-2">
-      <div className="inline-flex rounded-2xl bg-slate-100 p-1" role="group" aria-label="Período do gráfico">
+      <div className="inline-flex rounded-2xl border border-[#E6EAF0] bg-white p-1 shadow-soft" role="group" aria-label="Período do gráfico">
         {(['mes', 'anual'] as const).map((option) => (
           <button
             key={option}
             type="button"
             aria-pressed={period === option}
             onClick={() => setPeriod(option)}
-            className={`rounded-xl px-3 py-1.5 text-[11px] font-bold transition ${
+            className={`min-h-9 rounded-xl px-3 py-1.5 text-[11px] font-bold transition ${
               period === option ? 'bg-white text-[#1E3A5F] shadow-sm' : 'text-slate-500 hover:text-[#1E3A5F]'
             }`}
           >
@@ -77,7 +77,7 @@ export function Graficos({ state, flow }: GraficosProps) {
       {period === 'mes' && (
         <select
           aria-label="Mês do gráfico"
-          className="field money !w-auto !py-1.5 text-xs"
+          className="field money !min-h-11 !w-auto !py-2 text-xs"
           value={month}
           onChange={(event) => setMonth(Number(event.target.value))}
         >
@@ -104,11 +104,11 @@ export function Graficos({ state, flow }: GraficosProps) {
 
   return (
     <section>
-      <header className="mb-4">
+      <header className="mb-5">
         <h2 className="text-2xl font-extrabold tracking-tight text-slate-900">Gráficos</h2>
       </header>
 
-      <div className="grid gap-3 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2">
         <Donut
           segments={wealthSegments}
           title="Livre × caixinhas"
@@ -124,19 +124,19 @@ export function Graficos({ state, flow }: GraficosProps) {
         />
       </div>
 
-      <article className="card mt-3">
+      <article className="card mt-4 p-5 sm:p-6">
         <h3 className="text-[15px] font-bold text-slate-900">Entradas e saídas por mês</h3>
         <div className="mt-3 flex items-center gap-4 text-[11px] font-semibold text-slate-400">
           <span className="flex items-center gap-1.5"><i className="h-2 w-2 rounded-full bg-[#4A6B53]" /> entradas</span>
           <span className="flex items-center gap-1.5"><i className="h-2 w-2 rounded-full bg-[#C0604D]" /> saídas</span>
         </div>
-        <div className="mt-5 space-y-4">
+        <div className="mt-5 space-y-3">
           {flow.months.map((month) => (
-            <div key={month.month} className="grid grid-cols-[28px_1fr] items-center gap-3">
+            <div key={month.month} className="grid grid-cols-[28px_minmax(0,1fr)] items-center gap-3">
               <span className="text-[11px] font-bold uppercase text-slate-400">{MONTH_SHORT[month.month]}</span>
               <div className="space-y-1.5">
                 <div className="flex items-center gap-2">
-                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-50">
+                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-[#EEF2F6]">
                     <div
                       className="h-full rounded-full bg-[#4A6B53] transition-all duration-500"
                       style={{ width: `${(month.incomeCents / maxMonthly) * 100}%` }}
@@ -147,7 +147,7 @@ export function Graficos({ state, flow }: GraficosProps) {
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-50">
+                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-[#EEF2F6]">
                     <div
                       className="h-full rounded-full bg-[#C0604D] transition-all duration-500"
                       style={{ width: `${(month.expenseCents / maxMonthly) * 100}%` }}

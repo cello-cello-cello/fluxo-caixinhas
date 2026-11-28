@@ -1,7 +1,7 @@
 import { carryIn, expandTransactions } from './calc'
 import { BOX_COLORS } from './constants'
-import { isValidIsoDate } from './dates'
-import type { AppState, Box, CreditCard, Transaction, TransactionType } from '../types'
+import { isoDate, isValidIsoDate, todayIso } from './dates'
+import type { AppState, Box, CardInvoice, CardInvoiceItem, CreditCard, Transaction, TransactionType } from '../types'
 
 const STORAGE_KEY = 'fluxo-caixinhas:v1'
 const VALID_TYPES: TransactionType[] = ['entrada', 'saida', 'guardar', 'resgatar']
@@ -12,7 +12,143 @@ export function createId(): string {
 }
 
 export function createInitialState(year = new Date().getFullYear()): AppState {
-  return { version: 1, year, initialBalanceCents: 0, boxes: [], cards: [], transactions: [] }
+  return { version: 1, year, initialBalanceCents: 0, boxes: [], cards: [], cardInvoices: [], transactions: [] }
+}
+
+export function createDemoState(year = new Date().getFullYear()): AppState {
+  const currentMonth = Number(todayIso().slice(5, 7)) - 1
+  const currentDate = isoDate(year, currentMonth, 18)
+
+  return {
+    version: 1,
+    year,
+    initialBalanceCents: 4_800_000,
+    boxes: [
+      {
+        id: 'demo-viagem',
+        name: 'Viagem 2027',
+        color: '#4A6B53',
+        balanceCents: 1_250_000,
+        goalCents: 3_000_000,
+        targetMonth: `${year + 1}-11`,
+        autoContributionCents: 80_000,
+        autoContributionDay: 5,
+        yieldRate: 6,
+      },
+      {
+        id: 'demo-reserva',
+        name: 'Reserva de emergência',
+        color: '#1E3A5F',
+        balanceCents: 860_000,
+        goalCents: 2_000_000,
+        targetMonth: `${year + 1}-05`,
+        autoContributionCents: 50_000,
+        autoContributionDay: 20,
+      },
+      {
+        id: 'demo-presentes',
+        name: 'Presentes',
+        color: '#C0604D',
+        balanceCents: 180_000,
+        goalCents: 600_000,
+        targetMonth: `${year}-12`,
+      },
+    ],
+    cards: [
+      { id: 'demo-cartao-nubank', name: 'Nubank', limitCents: 1_200_000, closingDay: 10, dueDay: 15 },
+      { id: 'demo-cartao-itaipava', name: 'Itaipava', limitCents: 800_000, closingDay: 18, dueDay: 25 },
+    ],
+    cardInvoices: [{
+      id: 'demo-invoice-nubank',
+      cardId: 'demo-cartao-nubank',
+      invoiceMonth: isoDate(year, currentMonth, 1).slice(0, 7),
+      items: [{
+        id: 'demo-netflix',
+        description: 'NETFLIX',
+        amountCents: 3_990,
+        currentInstallment: 2,
+        installmentCount: 6,
+        purchaseDate: isoDate(year, currentMonth, 13),
+      }],
+      rawText: '',
+      sections: [],
+    }],
+    transactions: [
+      {
+        id: 'demo-salario',
+        date: isoDate(year, 0, 5),
+        description: 'Salário',
+        category: 'Salário',
+        type: 'entrada',
+        amountCents: 750_000,
+        recurrenceDay: 5,
+        recurrenceEnd: `${year + 1}-12`,
+      },
+      {
+        id: 'demo-aluguel',
+        date: isoDate(year, 0, 10),
+        description: 'Aluguel',
+        category: 'Moradia',
+        type: 'saida',
+        amountCents: 220_000,
+        recurrenceDay: 10,
+        recurrenceEnd: `${year + 1}-12`,
+      },
+      {
+        id: 'demo-mercado',
+        date: isoDate(year, 0, 12),
+        description: 'Mercado',
+        category: 'Alimentação',
+        type: 'saida',
+        amountCents: 96_000,
+        recurrenceDay: 12,
+        recurrenceEnd: `${year + 1}-12`,
+      },
+      {
+        id: 'demo-internet',
+        date: isoDate(year, 0, 20),
+        description: 'Internet',
+        category: 'Telefone',
+        type: 'saida',
+        amountCents: 12_000,
+        recurrenceDay: 20,
+        recurrenceEnd: `${year + 1}-12`,
+      },
+      {
+        id: 'demo-aporte-viagem',
+        date: isoDate(year, 0, 5),
+        description: 'Aporte automático · Viagem 2027',
+        category: 'Caixinhas',
+        type: 'guardar',
+        amountCents: 80_000,
+        boxId: 'demo-viagem',
+        autoBoxId: 'demo-viagem',
+        recurrenceDay: 5,
+        recurrenceEnd: `${year + 1}-11`,
+      },
+      {
+        id: 'demo-aporte-reserva',
+        date: isoDate(year, 0, 20),
+        description: 'Aporte automático · Reserva',
+        category: 'Caixinhas',
+        type: 'guardar',
+        amountCents: 50_000,
+        boxId: 'demo-reserva',
+        autoBoxId: 'demo-reserva',
+        recurrenceDay: 20,
+        recurrenceEnd: `${year + 1}-05`,
+      },
+      {
+        id: 'demo-resgate',
+        date: currentDate,
+        description: 'Resgate · Presentes',
+        category: 'Caixinhas',
+        type: 'resgatar',
+        amountCents: 30_000,
+        boxId: 'demo-presentes',
+      },
+    ],
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -32,12 +168,20 @@ function optionalDate(value: unknown): string | undefined {
   return isValidIsoDate(value) ? value : undefined
 }
 
+function optionalMonth(value: unknown): string | undefined {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}$/.test(value)) return undefined
+  const month = Number(value.slice(5))
+  return month >= 1 && month <= 12 ? value : undefined
+}
+
 function sanitizeBox(value: unknown): Box | null {
   if (!isRecord(value)) return null
   const name = typeof value.name === 'string' ? value.name.trim().slice(0, 80) : ''
   if (!name) return null
 
   const rate = Number(value.yieldRate)
+  const autoContributionCents = Math.max(0, toInteger(value.autoContributionCents))
+  const autoContributionDay = toInteger(value.autoContributionDay)
   return {
     id: typeof value.id === 'string' && value.id ? value.id : createId(),
     name,
@@ -45,6 +189,9 @@ function sanitizeBox(value: unknown): Box | null {
     balanceCents: Math.max(0, toInteger(value.balanceCents)),
     goalCents: Math.max(0, toInteger(value.goalCents)),
     targetDate: optionalDate(value.targetDate),
+    targetMonth: optionalMonth(value.targetMonth),
+    autoContributionCents: autoContributionCents > 0 ? autoContributionCents : undefined,
+    autoContributionDay: autoContributionDay >= 1 && autoContributionDay <= 31 ? autoContributionDay : undefined,
     yieldRate: Number.isFinite(rate) ? Math.min(1000, Math.max(-99, rate)) : undefined,
   }
 }
@@ -55,14 +202,112 @@ function sanitizeCard(value: unknown): CreditCard | null {
   if (!name) return null
 
   const day = (value: unknown) => Math.min(31, Math.max(1, toInteger(value, 1)))
+  const closingDate = optionalDate(value.closingDate)
+  const dueDate = optionalDate(value.dueDate)
 
   return {
     id: typeof value.id === 'string' && value.id ? value.id : createId(),
     name,
     limitCents: Math.max(0, toInteger(value.limitCents)),
-    closingDay: day(value.closingDay),
-    dueDay: day(value.dueDay),
+    closingDay: closingDate ? Number(closingDate.slice(8)) : day(value.closingDay),
+    dueDay: dueDate ? Number(dueDate.slice(8)) : day(value.dueDay),
+    closingDate,
+    dueDate,
   }
+}
+
+function sanitizeCardInvoiceItem(value: unknown): CardInvoiceItem | null {
+  if (!isRecord(value)) return null
+  const description = typeof value.description === 'string' ? value.description.trim().slice(0, 140) : ''
+  const amountCents = toInteger(value.amountCents)
+  if (!description || amountCents === 0) return null
+
+  const count = Math.min(36, Math.max(1, toInteger(value.installmentCount, 1)))
+  const current = Math.min(count, Math.max(1, toInteger(value.currentInstallment, 1)))
+  const source = typeof value.source === 'string' && value.source.trim() ? value.source.trim().slice(0, 120) : undefined
+
+  return {
+    id: typeof value.id === 'string' && value.id ? value.id : createId(),
+    description,
+    amountCents,
+    currentInstallment: current,
+    installmentCount: count,
+    purchaseDate: optionalDate(value.purchaseDate),
+    dueDate: optionalDate(value.dueDate),
+    source,
+  }
+}
+
+function sanitizeCardInvoice(value: unknown, cardIds: Set<string>): CardInvoice | null {
+  if (!isRecord(value)) return null
+  if (typeof value.cardId !== 'string' || !cardIds.has(value.cardId)) return null
+  const invoiceMonth = optionalMonth(value.invoiceMonth)
+  if (!invoiceMonth) return null
+
+  return {
+    id: typeof value.id === 'string' && value.id ? value.id : `${value.cardId}:${invoiceMonth}`,
+    cardId: value.cardId,
+    invoiceMonth,
+    items: Array.isArray(value.items)
+      ? value.items.map(sanitizeCardInvoiceItem).filter((item): item is CardInvoiceItem => item !== null)
+      : [],
+    rawText: typeof value.rawText === 'string' ? value.rawText : '',
+    sections: Array.isArray(value.sections)
+      ? value.sections.filter((section): section is string => typeof section === 'string').map((section) => section.slice(0, 80))
+      : [],
+    fromMonth: optionalMonth(value.fromMonth),
+  }
+}
+
+function migrateCardInvoices(transactions: Transaction[], cardIds: Set<string>): CardInvoice[] {
+  const groups = new Map<string, CardInvoice>()
+
+  for (const transaction of transactions) {
+    if (!transaction.cardId || !cardIds.has(transaction.cardId) || !transaction.installmentGroupId) continue
+    const invoiceMonth = transaction.invoiceMonth ?? transaction.date.slice(0, 7)
+    const key = `${transaction.cardId}|${invoiceMonth}|${transaction.installmentGroupId}`
+    let invoice = groups.get(key)
+    if (!invoice) {
+      invoice = {
+        id: `${transaction.cardId}:${invoiceMonth}:${transaction.installmentGroupId}`,
+        cardId: transaction.cardId,
+        invoiceMonth,
+        items: [],
+        rawText: '',
+        sections: [],
+      }
+      groups.set(key, invoice)
+    }
+
+    const itemId = transaction.installmentGroupId.slice(transaction.cardId.length + 1)
+    let item = invoice.items.find((candidate) => candidate.id === itemId)
+    if (!item) {
+      item = {
+        id: itemId || transaction.installmentGroupId,
+        description: transaction.description.replace(/ \(\d+\/\d+\)$/, ''),
+        amountCents: transaction.type === 'entrada' ? -transaction.amountCents : transaction.amountCents,
+        currentInstallment: transaction.installmentIndex ?? 1,
+        installmentCount: transaction.installmentCount ?? 1,
+        dueDate: transaction.date,
+      }
+      invoice.items.push(item)
+    }
+
+    const index = transaction.installmentIndex ?? item.currentInstallment
+    if (index < item.currentInstallment) {
+      item.currentInstallment = index
+      item.dueDate = transaction.date
+    }
+    item.installmentCount = Math.max(item.installmentCount, transaction.installmentCount ?? item.installmentCount)
+  }
+
+  return [...groups.values()].map((invoice) => {
+    const firstDate = invoice.items
+      .map((item) => item.dueDate ?? '')
+      .filter(Boolean)
+      .sort()[0]
+    return { ...invoice, fromMonth: firstDate?.slice(0, 7) }
+  })
 }
 
 function sanitizeTransaction(value: unknown, boxIds: Set<string>, cardIds: Set<string>): Transaction | null {
@@ -79,6 +324,9 @@ function sanitizeTransaction(value: unknown, boxIds: Set<string>, cardIds: Set<s
   const rawCategory = typeof value.category === 'string' && value.category.trim() ? value.category.trim() : 'Outros'
   const category = rawCategory === 'Casa' ? 'Moradia' : rawCategory
   const boxId = typeof value.boxId === 'string' && boxIds.has(value.boxId) ? value.boxId : undefined
+  const autoBoxId = type === 'guardar' && typeof value.autoBoxId === 'string' && boxIds.has(value.autoBoxId)
+    ? value.autoBoxId
+    : undefined
   const cardId = typeof value.cardId === 'string' && cardIds.has(value.cardId) ? value.cardId : undefined
   const installmentGroupId = typeof value.installmentGroupId === 'string' && value.installmentGroupId
     ? value.installmentGroupId
@@ -110,6 +358,7 @@ function sanitizeTransaction(value: unknown, boxIds: Set<string>, cardIds: Set<s
     type,
     amountCents,
     boxId,
+    autoBoxId,
     cardId,
     installmentGroupId,
     installmentIndex: installmentIndexValue > 0 ? installmentIndexValue : undefined,
@@ -133,11 +382,18 @@ export function sanitizeState(value: unknown): AppState | null {
     ? value.cards.map(sanitizeCard).filter((card): card is CreditCard => card !== null)
     : []
   const cardIds = new Set(cards.map((card) => card.id))
+  let cardInvoices = Array.isArray(value.cardInvoices)
+    ? value.cardInvoices
+        .map((item) => sanitizeCardInvoice(item, cardIds))
+        .filter((item): item is CardInvoice => item !== null)
+    : []
   const transactions = Array.isArray(value.transactions)
     ? value.transactions
         .map((item) => sanitizeTransaction(item, boxIds, cardIds))
         .filter((item): item is Transaction => item !== null)
     : []
+
+  if (cardInvoices.length === 0) cardInvoices = migrateCardInvoices(transactions, cardIds)
 
   return {
     version: 1,
@@ -145,7 +401,8 @@ export function sanitizeState(value: unknown): AppState | null {
     initialBalanceCents: toInteger(value.initialBalanceCents),
     boxes,
     cards,
-    transactions,
+    cardInvoices,
+    transactions: transactions.filter((item) => !(item.cardId && item.installmentGroupId)),
   }
 }
 
@@ -212,13 +469,15 @@ export function exportTransactionsCsv(state: AppState): string {
 export function exportBoxesCsv(state: AppState): string {
   const boxBalances = carryIn(state, state.year).boxBalances
   const rows = [
-    ['nome', 'cor', 'saldo_inicial', 'meta', 'data_alvo', 'rendimento_anual'],
+    ['nome', 'cor', 'saldo_inicial', 'meta', 'data_alvo_mes', 'aporte_mensal', 'dia_aporte', 'rendimento_anual'],
     ...state.boxes.map((box) => [
       box.name,
       box.color,
       csvAmount(boxBalances[box.id] ?? box.balanceCents),
       csvAmount(box.goalCents),
-      box.targetDate ?? '',
+      box.targetMonth ?? box.targetDate?.slice(0, 7) ?? '',
+      box.autoContributionCents ? csvAmount(box.autoContributionCents) : '',
+      box.autoContributionDay ? String(box.autoContributionDay) : '',
       box.yieldRate === undefined ? '' : String(box.yieldRate).replace('.', ','),
     ]),
   ]

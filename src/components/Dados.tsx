@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { Database, Download, FileJson, FileSpreadsheet, RotateCcw, Upload } from 'lucide-react'
+import { Database, Download, FileJson, FileSpreadsheet, RotateCcw, Sparkles, Upload } from 'lucide-react'
 import { centsToInput, parseAmountToCents } from '../lib/money'
 import type { AppState } from '../types'
 
 interface DadosProps {
   state: AppState
+  demoActive: boolean
+  onToggleDemo: () => void
   onSettings: (year: number, initialBalanceCents: number) => void
   onImportJson: (file: File) => void
   onImportCsv: (file: File) => void
@@ -17,6 +19,8 @@ interface DadosProps {
 
 export function Dados({
   state,
+  demoActive,
+  onToggleDemo,
   onSettings,
   onImportJson,
   onImportCsv,
@@ -56,12 +60,34 @@ export function Dados({
 
   return (
     <section>
-      <header className="mb-4">
+      <header className="mb-5">
         <h2 className="text-2xl font-extrabold tracking-tight text-slate-900">Dados</h2>
       </header>
 
-      <div className="grid gap-3 lg:grid-cols-2">
-        <article className="card">
+      <article className="card mb-4 flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+        <div className="flex items-start gap-3">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-navy-soft text-navy">
+            <Sparkles size={17} />
+          </span>
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="text-[15px] font-bold text-slate-900">Modo demonstração</h3>
+              {demoActive && <span className="chip bg-moss-soft text-moss-dark">Ativo</span>}
+            </div>
+            <p className="mt-1 max-w-xl text-sm text-slate-500">
+              {demoActive
+                ? 'Você está vendo dados fictícios. Seus valores reais ficaram guardados.'
+                : 'Explore o app com dados fictícios. Seus valores reais não são alterados.'}
+            </p>
+          </div>
+        </div>
+        <button type="button" onClick={onToggleDemo} className="btn-primary w-full shrink-0 sm:w-auto">
+          {demoActive ? 'Voltar aos meus dados' : 'Modo demonstração'}
+        </button>
+      </article>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <article className="card flex h-full flex-col p-5 sm:p-6">
           <div className="mb-4 flex items-center gap-2">
             <span className="grid h-9 w-9 place-items-center rounded-xl bg-[#E9EFF5] text-[#1E3A5F]">
               <Database size={17} />
@@ -88,7 +114,7 @@ export function Dados({
           <p className="mt-4 text-xs leading-relaxed text-slate-400">Defina o saldo inicial do 1º ano.</p>
         </article>
 
-        <article className="card">
+        <article className="card flex h-full flex-col p-5 sm:p-6">
           <div className="mb-4 flex items-center gap-2">
             <span className="grid h-9 w-9 place-items-center rounded-xl bg-[#EEF4F0] text-[#3A5743]">
               <Download size={17} />
@@ -106,10 +132,10 @@ export function Dados({
               <FileSpreadsheet size={16} className="text-[#1E3A5F]" /> CSV de caixinhas
             </button>
           </div>
-          <p className="mt-4 text-xs leading-relaxed text-slate-400">CSV pronto para planilhas em pt-BR.</p>
+          <p className="mt-4 text-xs text-slate-400">CSV em pt-BR para planilhas.</p>
         </article>
 
-        <article className="card">
+        <article className="card flex h-full flex-col p-5 sm:p-6">
           <div className="mb-4 flex items-center gap-2">
             <span className="grid h-9 w-9 place-items-center rounded-xl bg-[#E9EFF5] text-[#1E3A5F]">
               <Upload size={17} />
@@ -146,10 +172,10 @@ export function Dados({
               <FileSpreadsheet size={16} className="text-[#3A5743]" /> Importar CSV
             </button>
           </div>
-          <p className="mt-4 text-xs leading-relaxed text-slate-400">Use o formato do CSV exportado.</p>
+          <p className="mt-4 text-xs text-slate-400">Use o CSV exportado aqui.</p>
         </article>
 
-        <article className="card">
+        <article className="card flex h-full flex-col p-5 sm:p-6">
           <div className="mb-4 flex items-center gap-2">
             <span className="grid h-9 w-9 place-items-center rounded-xl bg-[#FFF3EF] text-[#A64B39]">
               <RotateCcw size={17} />
@@ -170,7 +196,7 @@ export function Dados({
             className={`mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border-2 px-4 py-3 text-sm font-extrabold transition sm:w-auto ${
               confirmReset
                 ? 'border-[#C0604D] bg-[#C0604D] text-white shadow-md ring-2 ring-[#C0604D] ring-offset-2'
-                : 'border-slate-200 text-slate-600 hover:border-[#C0604D] hover:text-[#A64B39]'
+                : 'border-[#E6EAF0] text-slate-600 hover:border-[#C0604D] hover:text-[#A64B39]'
             }`}
           >
             <RotateCcw size={16} /> {confirmReset ? 'Confirmar limpeza' : 'Limpar todos os dados'}

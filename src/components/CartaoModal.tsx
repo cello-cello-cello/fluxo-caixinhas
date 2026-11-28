@@ -1,9 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Trash2, X } from 'lucide-react'
+import { daysInMonth, isoDate, isValidIsoDate } from '../lib/dates'
 import { centsToInput, parseAmountToCents } from '../lib/money'
 import { createId } from '../lib/storage'
 import type { CreditCard } from '../types'
+
+function defaultDate(day: number, offsetMonths = 0): string {
+  const now = new Date()
+  const monthIndex = now.getMonth() + offsetMonths
+  const year = now.getFullYear() + Math.floor(monthIndex / 12)
+  const month = ((monthIndex % 12) + 12) % 12
+  return isoDate(year, month, Math.min(day, daysInMonth(year, month)))
+}
 
 interface CartaoModalProps {
   card?: CreditCard
@@ -15,8 +24,8 @@ interface CartaoModalProps {
 export function CartaoModal({ card, onClose, onSave, onDelete }: CartaoModalProps) {
   const [name, setName] = useState(card?.name ?? '')
   const [limit, setLimit] = useState(card ? centsToInput(card.limitCents) : '0,00')
-  const [closingDay, setClosingDay] = useState(String(card?.closingDay ?? 10))
-  const [dueDay, setDueDay] = useState(String(card?.dueDay ?? 15))
+  const [closingDate, setClosingDate] = useState(card?.closingDate ?? defaultDate(card?.closingDay ?? 10))
+  const [dueDate, setDueDate] = useState(card?.dueDate ?? defaultDate(card?.dueDay ?? 15, 1))
   const [error, setError] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const firstField = useRef<HTMLInputElement>(null)
@@ -35,34 +44,34 @@ export function CartaoModal({ card, onClose, onSave, onDelete }: CartaoModalProp
     setError(null)
 
     const limitCents = parseAmountToCents(limit)
-    const closing = Number(closingDay)
-    const due = Number(dueDay)
 
     if (!name.trim()) return setError('Dê um nome ou apelido para o cartão.')
     if (!limitCents) return setError('Informe um limite total em R$ maior que zero.')
-    if (!Number.isInteger(closing) || closing < 1 || closing > 31) return setError('O fechamento deve ser entre 1 e 31.')
-    if (!Number.isInteger(due) || due < 1 || due > 31) return setError('O vencimento deve ser entre 1 e 31.')
+    if (!isValidIsoDate(closingDate)) return setError('Informe uma data de fechamento válida.')
+    if (!isValidIsoDate(dueDate)) return setError('Informe uma data de vencimento válida.')
 
     onSave({
       id: card?.id ?? createId(),
       name: name.trim(),
       limitCents,
-      closingDay: closing,
-      dueDay: due,
+      closingDay: Number(closingDate.slice(8)),
+      dueDay: Number(dueDate.slice(8)),
+      closingDate,
+      dueDate,
     })
   }
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/35 backdrop-blur-sm sm:items-center sm:p-6"
+      className="modal-backdrop sm:items-center sm:p-6"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose()
       }}
     >
-      <div role="dialog" aria-modal="true" aria-labelledby="cartao-title" className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-4xl bg-white p-5 shadow-2xl sm:rounded-4xl sm:p-7">
-        <header className="mb-5 flex items-start justify-between gap-3">
+      <div role="dialog" aria-modal="true" aria-labelledby="cartao-title" className="modal-card max-w-lg sm:rounded-[20px]">
+        <header className="modal-header sm:px-6">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.16em] text-navy">Cartão de crédito</p>
+            <p className="modal-kicker">Cartão de crédito</p>
             <h2 id="cartao-title" className="mt-1 text-xl font-extrabold text-slate-900">
               {card ? 'Editar cartão' : 'Novo cartão'}
             </h2>
@@ -72,7 +81,7 @@ export function CartaoModal({ card, onClose, onSave, onDelete }: CartaoModalProp
           </button>
         </header>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form id="cartao-form" onSubmit={handleSubmit} className="modal-body space-y-4 sm:px-6">
           <div>
             <label className="label" htmlFor="cartao-nome">Nome ou apelido</label>
             <input
@@ -95,47 +104,47 @@ export function CartaoModal({ card, onClose, onSave, onDelete }: CartaoModalProp
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label className="label" htmlFor="cartao-fechamento">Dia de fechamento</label>
-              <input id="cartao-fechamento" className="field money" inputMode="numeric" value={closingDay} onChange={(event) => setClosingDay(event.target.value)} />
+              <label className="label" htmlFor="cartao-fechamento">Data de fechamento</label>
+              <input id="cartao-fechamento" type="date" className="field money" value={closingDate} onChange={(event) => setClosingDate(event.target.value)} />
             </div>
             <div>
-              <label className="label" htmlFor="cartao-vencimento">Dia de vencimento</label>
-              <input id="cartao-vencimento" className="field money" inputMode="numeric" value={dueDay} onChange={(event) => setDueDay(event.target.value)} />
+              <label className="label" htmlFor="cartao-vencimento">Data de vencimento</label>
+              <input id="cartao-vencimento" type="date" className="field money" value={dueDate} onChange={(event) => setDueDate(event.target.value)} />
             </div>
           </div>
 
-          <p className="text-xs text-slate-400">
-            As parcelas importadas caem no dia de vencimento; se ele cair em fim de semana, o lançamento é antecipado para o dia útil anterior.
-          </p>
+          <p className="text-xs text-slate-400">Vencimento pode ser no mês ou ano seguinte; fins de semana antecipam.</p>
 
           {error && (
             <p role="alert" className="rounded-2xl bg-navy-soft px-4 py-3 text-sm font-semibold text-navy">{error}</p>
           )}
-
-          <div className="flex flex-col gap-2 pt-2 sm:flex-row-reverse">
-            <button type="submit" className="btn-primary w-full sm:w-auto">Salvar cartão</button>
-            {card && (
-              <button
-                type="button"
-                onClick={() => {
-                  if (!confirmDelete) {
-                    setConfirmDelete(true)
-                    return
-                  }
-                  onDelete(card.id)
-                }}
-                className={`inline-flex w-full items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-bold transition sm:w-auto ${
-                  confirmDelete ? 'border-navy bg-navy text-white' : 'border-slate-200 text-slate-500 hover:text-navy'
-                }`}
-              >
-                <Trash2 size={16} /> {confirmDelete ? 'Confirmar exclusão' : 'Excluir'}
-              </button>
-            )}
-            <button type="button" onClick={onClose} className="btn-soft w-full sm:w-auto">Cancelar</button>
-          </div>
         </form>
+
+        <footer className="modal-footer sm:px-6">
+          <div className="flex gap-2">
+            <button type="button" onClick={onClose} className="btn-soft min-h-11 flex-1">Cancelar</button>
+            <button type="submit" form="cartao-form" className="btn-primary min-h-11 flex-[2]">Salvar cartão</button>
+          </div>
+          {card && (
+            <button
+              type="button"
+              onClick={() => {
+                if (!confirmDelete) {
+                  setConfirmDelete(true)
+                  return
+                }
+                onDelete(card.id)
+              }}
+              className={`mt-2 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl border-2 px-4 py-2.5 text-sm font-extrabold transition ${
+                confirmDelete ? 'border-navy bg-navy text-white shadow-lift' : 'border-[#E6EAF0] text-slate-500 hover:border-navy hover:text-navy'
+              }`}
+            >
+              <Trash2 size={16} /> {confirmDelete ? 'Confirmar exclusão' : 'Excluir'}
+            </button>
+          )}
+        </footer>
       </div>
     </div>
   )

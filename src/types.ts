@@ -26,6 +26,7 @@ export interface Transaction {
   recurrenceEnd?: string
   adjustToBusinessDay?: boolean
   sourceId?: string
+  autoBoxId?: string
 }
 
 export interface CreditCard {
@@ -34,6 +35,29 @@ export interface CreditCard {
   limitCents: number
   closingDay: number
   dueDay: number
+  closingDate?: string
+  dueDate?: string
+}
+
+export interface CardInvoiceItem {
+  id: string
+  description: string
+  amountCents: number
+  currentInstallment: number
+  installmentCount: number
+  purchaseDate?: string
+  dueDate?: string
+  source?: string
+}
+
+export interface CardInvoice {
+  id: string
+  cardId: string
+  invoiceMonth: string
+  items: CardInvoiceItem[]
+  rawText: string
+  sections: string[]
+  fromMonth?: string
 }
 
 export interface Box {
@@ -43,6 +67,9 @@ export interface Box {
   balanceCents: number
   goalCents: number
   targetDate?: string
+  targetMonth?: string
+  autoContributionCents?: number
+  autoContributionDay?: number
   yieldRate?: number
 }
 
@@ -52,6 +79,7 @@ export interface AppState {
   initialBalanceCents: number
   boxes: Box[]
   cards: CreditCard[]
+  cardInvoices: CardInvoice[]
   transactions: Transaction[]
 }
 

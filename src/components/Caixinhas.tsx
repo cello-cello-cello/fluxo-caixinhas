@@ -1,8 +1,9 @@
 import { ArrowDownToLine, ArrowUpFromLine, CalendarDays, Pencil, PiggyBank, Sparkles, Target } from 'lucide-react'
 import { Ring } from './Ring'
-import { findBestDepositDay, planBoxGoal, projectedBoxValue } from '../lib/boxes'
+import { boxTargetIso, findBestDepositDay, planBoxGoal, projectedBoxValue } from '../lib/boxes'
 import type { BoxGoalPlan } from '../lib/boxes'
-import { formatDate } from '../lib/dates'
+import { expandTransactions } from '../lib/calc'
+import { formatDate, MONTH_NAMES } from '../lib/dates'
 import { formatBRL, formatPercent } from '../lib/money'
 import type { AppState, Box, MonthFlow, Position, TransactionType } from '../types'
 
@@ -14,16 +15,20 @@ interface CaixinhasProps {
   onEdit: (box: Box) => void
   onDelete: (id: string) => void
   onTransfer: (type: Extract<TransactionType, 'guardar' | 'resgatar'>, boxId: string) => void
+  onUseBestDay: (box: Box, day: number, amountCents: number) => void
 }
 
-export function Caixinhas({ state, position, monthFlow, onAdd, onEdit, onDelete, onTransfer }: CaixinhasProps) {
+export function Caixinhas({ state, position, monthFlow, onAdd, onEdit, onDelete, onTransfer, onUseBestDay }: CaixinhasProps) {
   const cards = position.netWorthCents > 0 ? position.totalBoxCents / position.netWorthCents : 0
   const dailyFreeBalances = Object.fromEntries(monthFlow.days.map((day) => [day.day, day.balanceCents]))
   const daysInCurrentMonth = monthFlow.days.length
+  const movements = expandTransactions(state.transactions)
+    .filter((item) => item.boxId && (item.type === 'guardar' || item.type === 'resgatar'))
+    .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id))
 
   return (
     <section>
-      <header className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <header className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-2xl font-extrabold tracking-tight text-slate-900">Caixinhas</h2>
         </div>
@@ -32,23 +37,23 @@ export function Caixinhas({ state, position, monthFlow, onAdd, onEdit, onDelete,
         </button>
       </header>
 
-      <div className="card mb-4 grid grid-cols-2 gap-4 sm:grid-cols-3">
+      <div className="card mb-5 grid grid-cols-2 gap-5 p-5 sm:grid-cols-3 sm:p-6">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Saldo livre</p>
-          <p className="money mt-1 text-lg font-extrabold text-slate-900">{formatBRL(position.freeBalanceCents)}</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Saldo livre</p>
+          <p className="money mt-1 text-xl font-extrabold text-slate-900">{formatBRL(position.freeBalanceCents)}</p>
         </div>
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Em caixinhas</p>
-          <p className="money mt-1 text-lg font-extrabold text-[#1E3A5F]">{formatBRL(position.totalBoxCents)}</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Em caixinhas</p>
+          <p className="money mt-1 text-xl font-extrabold text-[#1E3A5F]">{formatBRL(position.totalBoxCents)}</p>
         </div>
         <div className="col-span-2 sm:col-span-1">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Parcela reservada</p>
-          <p className="money mt-1 text-lg font-extrabold text-moss-dark">{Math.round(cards * 100)}%</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Parcela reservada</p>
+          <p className="money mt-1 text-xl font-extrabold text-moss-dark">{Math.round(cards * 100)}%</p>
         </div>
       </div>
 
       {state.boxes.length === 0 ? (
-        <div className="card flex flex-col items-center py-12 text-center">
+        <div className="card flex flex-col items-center p-8 py-12 text-center">
           <div className="grid h-16 w-16 place-items-center rounded-full bg-navy-soft text-navy">
             <Sparkles size={26} />
           </div>
@@ -59,19 +64,21 @@ export function Caixinhas({ state, position, monthFlow, onAdd, onEdit, onDelete,
           </button>
         </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
           {state.boxes.map((box) => {
             const balance = position.boxBalances[box.id] ?? box.balanceCents
             const progress = box.goalCents > 0 ? balance / box.goalCents : 0
-            const projection = projectedBoxValue(balance, box.yieldRate, box.targetDate)
+            const projection = projectedBoxValue(balance, box.yieldRate, boxTargetIso(box))
             const gain = projection - balance
             const plan = planBoxGoal(box, balance)
-            const suggestion = plan && !plan.achieved
-              ? findBestDepositDay(plan.monthlyContributionCents, dailyFreeBalances, daysInCurrentMonth)
+            const contributionCents = box.autoContributionCents ?? plan?.monthlyContributionCents ?? 0
+            const suggestion = plan && !plan.achieved && contributionCents > 0
+              ? findBestDepositDay(contributionCents, dailyFreeBalances, daysInCurrentMonth)
               : null
+            const history = movements.filter((item) => item.boxId === box.id).slice(0, 5)
 
             return (
-              <article key={box.id} className="card relative overflow-hidden pt-6">
+              <article key={box.id} className="card relative overflow-hidden p-5 pt-6 sm:p-6 sm:pt-7">
                 <span className="absolute inset-x-0 top-0 h-1" style={{ backgroundColor: box.color }} />
                 <div className="flex items-start gap-4">
                   <Ring progress={progress} color={box.color} size={88} stroke={9} label={`Progresso de ${box.name}`}>
@@ -99,26 +106,32 @@ export function Caixinhas({ state, position, monthFlow, onAdd, onEdit, onDelete,
                 </div>
 
                 <div className="mt-4 space-y-2 border-t border-slate-100 pt-4 text-xs">
-                  {box.targetDate && (
+                  {(box.targetMonth || box.targetDate) && (
                     <p className="flex items-center gap-2 text-slate-500">
                       <CalendarDays size={14} className="text-slate-400" />
-                      Alvo: {formatDate(box.targetDate)}
+                      Alvo: {targetMonthLabel(box.targetMonth ?? box.targetDate?.slice(0, 7))}
                     </p>
                   )}
+                  {box.autoContributionCents ? (
+                    <p className="money flex items-center gap-2 text-navy">
+                      <Target size={14} />
+                      Aporte automático: {formatBRL(box.autoContributionCents)} · dia {box.autoContributionDay ?? 1}
+                    </p>
+                  ) : null}
                   {box.yieldRate !== undefined && (
-                    <p className="flex items-center gap-2 text-moss-dark">
+                    <p className="money flex items-center gap-2 text-moss-dark">
                       <Sparkles size={14} />
                       {formatPercent(box.yieldRate)} · projeção {formatBRL(projection)}
                       {gain > 0 && <span className="money font-bold">(+{formatBRL(gain)})</span>}
                     </p>
                   )}
-                  {!box.targetDate && box.yieldRate === undefined && (
+                  {!box.targetMonth && !box.targetDate && box.yieldRate === undefined && (
                     <p className="text-slate-400">Sem prazo ou rendimento definido.</p>
                   )}
                 </div>
 
                 {plan && (
-                  <div className="mt-3 rounded-2xl bg-slate-50 p-3">
+                  <div className="mt-4 rounded-2xl border border-[#E6EAF0] bg-[#F8FAFC] p-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
                         <Target size={13} /> Planejamento da meta
@@ -141,17 +154,26 @@ export function Caixinhas({ state, position, monthFlow, onAdd, onEdit, onDelete,
                           {formatBRL(plan.monthlyContributionCents)}
                           <span className="text-xs font-bold text-slate-400">{contributionPeriodLabel(plan)}</span>
                         </p>
-                        <p className="mt-0.5 text-[11px] text-slate-500">
+                        <p className="money mt-0.5 text-[11px] text-slate-500">
                           {goalDeadlineLabel(plan)} · {formatBRL(plan.remainingCents)} restantes
                         </p>
                       </>
                     )}
                     {suggestion && suggestion.recommendedDay !== null && (
                       <div className="mt-2 border-t border-slate-200 pt-2 text-[11px]">
-                        <p className="font-bold text-moss-dark">
-                          <CalendarDays size={12} className="mr-1 inline align-[-2px]" />
-                          Melhor dia: {suggestion.recommendedDay}
-                        </p>
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="font-bold text-moss-dark">
+                            <CalendarDays size={12} className="mr-1 inline align-[-2px]" />
+                            Melhor dia: {suggestion.recommendedDay}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => onUseBestDay(box, suggestion.recommendedDay as number, contributionCents)}
+                            className="rounded-lg bg-white px-2 py-1 font-bold text-navy ring-1 ring-slate-200 transition hover:bg-[#E9EFF5]"
+                          >
+                            Usar dia {suggestion.recommendedDay}
+                          </button>
+                        </div>
                         <p className="mt-1 leading-relaxed text-slate-500">{suggestion.reason}</p>
                         {suggestion.hasNegativeRisk && (
                           <p className="mt-1 font-bold text-rose-700">O aporte compromete o caixa livre no período.</p>
@@ -161,7 +183,27 @@ export function Caixinhas({ state, position, monthFlow, onAdd, onEdit, onDelete,
                   </div>
                 )}
 
-                <div className="mt-4 grid grid-cols-3 gap-2">
+                <div className="mt-5 border-t border-[#E6EAF0] pt-4">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Histórico</p>
+                  {history.length === 0 ? (
+                    <p className="mt-1 text-[11px] text-slate-400">Sem aportes ou resgates.</p>
+                  ) : (
+                    <ul className="mt-1 space-y-1">
+                      {history.map((item) => (
+                        <li key={item.id} className="flex items-center justify-between gap-2 text-[11px]">
+                          <span className="min-w-0 truncate text-slate-500">
+                            {formatDate(item.date)} · {item.description}
+                          </span>
+                          <span className={`money shrink-0 font-bold ${item.type === 'guardar' ? 'text-navy' : 'text-moss-dark'}`}>
+                            {item.type === 'guardar' ? '+' : '−'} {formatBRL(item.amountCents)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
+                <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-3">
                   <button type="button" className="btn-soft !px-2 text-[11px]" onClick={() => onTransfer('guardar', box.id)}>
                     <ArrowDownToLine size={14} /> Guardar
                   </button>
@@ -170,7 +212,7 @@ export function Caixinhas({ state, position, monthFlow, onAdd, onEdit, onDelete,
                   </button>
                   <button
                     type="button"
-                    className="btn-soft !px-2 text-[11px] text-slate-400"
+                    className="btn-soft col-span-2 !px-2 text-[11px] text-slate-400 sm:col-span-1"
                     onClick={() => onDelete(box.id)}
                     aria-label={`Excluir ${box.name}`}
                   >
@@ -184,6 +226,13 @@ export function Caixinhas({ state, position, monthFlow, onAdd, onEdit, onDelete,
       )}
     </section>
   )
+}
+
+function targetMonthLabel(value?: string): string {
+  if (!value) return '—'
+  const [year, month] = value.split('-').map(Number)
+  const name = MONTH_NAMES[month - 1]
+  return name ? `${name} de ${year}` : value
 }
 
 function contributionPeriodLabel(plan: BoxGoalPlan): string {

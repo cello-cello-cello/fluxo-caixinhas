@@ -163,7 +163,38 @@ describe('importação e validação', () => {
     expect(imported?.transactions[0].adjustToBusinessDay).toBe(true)
   })
 
-  it('preserva cartões e metadados de parcelas na sanitização', () => {
+  it('preserva faturas isoladas e as datas de fechamento/vencimento na sanitização', () => {
+    const state = createInitialState(2026)
+    state.cards = [{
+      id: 'c1',
+      name: 'Cartão',
+      limitCents: 100_000,
+      closingDay: 25,
+      dueDay: 1,
+      closingDate: '2026-12-25',
+      dueDate: '2027-01-01',
+    }]
+    state.cardInvoices = [{
+      id: 'c1:2026-12',
+      cardId: 'c1',
+      invoiceMonth: '2026-12',
+      items: [{
+        id: 'tv',
+        description: 'TV',
+        amountCents: 10_000,
+        currentInstallment: 1,
+        installmentCount: 3,
+        dueDate: '2027-01-01',
+      }],
+      rawText: '',
+      sections: [],
+      fromMonth: '2027-01',
+    }]
+
+    expect(parseJsonImport(JSON.stringify(state))).toEqual(state)
+  })
+
+  it('migra parcelas antigas do fluxo para a aba Cartões', () => {
     const state = createInitialState(2026)
     state.cards = [{ id: 'c1', name: 'Cartão', limitCents: 100_000, closingDay: 10, dueDay: 15 }]
     state.transactions = [
@@ -182,7 +213,50 @@ describe('importação e validação', () => {
       },
     ]
 
+    const imported = parseJsonImport(JSON.stringify(state))
+    expect(imported?.cardInvoices[0]).toMatchObject({
+      cardId: 'c1',
+      invoiceMonth: '2026-11',
+      fromMonth: '2026-11',
+    })
+    expect(imported?.cardInvoices[0].items[0]).toMatchObject({
+      id: 'netflix',
+      description: 'NETFLIX',
+      amountCents: 3_990,
+      currentInstallment: 2,
+      installmentCount: 6,
+      dueDate: '2026-11-13',
+    })
+    expect(imported?.transactions).toHaveLength(0)
+  })
+
+  it('preserva o mês alvo e o aporte automático na importação e exportação', () => {
+    const state = createInitialState(2027)
+    state.boxes = [{
+      id: 'b1',
+      name: 'Viagem',
+      color: '#4A6B53',
+      balanceCents: 0,
+      goalCents: 10_000,
+      targetMonth: '2027-12',
+      autoContributionCents: 10_000,
+      autoContributionDay: 5,
+    }]
+    state.transactions = [{
+      id: 'auto-b1',
+      date: '2027-01-05',
+      description: 'Aporte automático · Viagem',
+      category: 'Caixinhas',
+      type: 'guardar',
+      amountCents: 10_000,
+      boxId: 'b1',
+      autoBoxId: 'b1',
+      recurrenceDay: 5,
+      recurrenceEnd: '2027-12',
+    }]
+
     expect(parseJsonImport(JSON.stringify(state))).toEqual(state)
+    expect(exportBoxesCsv(state)).toContain('2027-12;100,00;5')
   })
 
   it('exporta a data já antecipada para o dia útil anterior', () => {
