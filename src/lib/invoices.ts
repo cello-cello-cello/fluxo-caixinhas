@@ -37,8 +37,7 @@ const CARD_FINAL = /(?:final\s*(?:n[ºo]?)?|cart[ãa]o\s*(?:final\s*)?|fatura\s*
 const MASKED_CARD = /\*{2,}\s*\*{2,}\s*\*{2,}\s*(\d{4})/i
 const BARE_FINAL = /^(?:\*+\s*)?(\d{4})(?:\s*\*+)?$/
 const SECTION_HEADER = /^(?:cart[ãa]o|fatura|lan[çc]amentos|compras|cr[ée]ditos?|d[ée]bitos?)/i
-const PHONE = /(?:\(?\d{2}\)?[\s-]*)?\d{4,5}-?\d{4}\b/
-const IGNORE_LINE = /^(?:valor\s+)?total\b|^(?:subtotal|limite|saldo|hist[óo]rico(?:\s+de\s+faturas?)?|resumo\s+da\s+fatura|fatura\s+anterior|faturas\s+anteriores|cet\b|custo\s+efetivo\s+total|iof\b|juros?\b|multa\b|encargos?\b|taxa\b|tarifa\b|endere[çc]o\b|cep\b|sac\b|ouvidoria|telefone|fone\b|central\s+de\s+atendimento|ddd\b)/i
+const INSTITUTIONAL_LINE = /^(?:sac\b|ouvidoria|central\s+de\s+atendimento|telefone|fone\b|ddd\b|cet\b|custo\s+efetivo\s+total|endere[çc]o\b|cep\b|resumo\s+da\s+fatura|valor\s+total|total\s+da\s+fatura|total\s+geral|subtotal|total\b|hist[óo]rico(?:\s+de\s+faturas?)?|fatura\s+anterior|faturas\s+anteriores)/i
 const INVOICE_TOTAL = /(?:valor\s+total|total\s+da\s+fatura|total\s+geral|total)\s*:?\s*(?:R\$\s*)?(-?\s*\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})|-?\s*\d+[.,]\d{2})/i
 const CREDIT_WORD = /(?:cr[ée]dito|estorno|pagamento|reembolso|devolu[çc][aã]o)/i
 const CHARGE_WORD = /(?:juros?|multa|encargos?|iof|taxa|tarifa|cet)/i
@@ -77,37 +76,35 @@ export function normalizeInvoiceLine(raw: string): string {
 }
 
 function isHeaderOrNoise(line: string): boolean {
-  return IGNORE_LINE.test(line) || SECTION_HEADER.test(line) || Boolean(CARD_FINAL.exec(line) ?? MASKED_CARD.exec(line))
+  return INSTITUTIONAL_LINE.test(line)
+    || SECTION_HEADER.test(line)
+    || Boolean(CARD_FINAL.exec(line) ?? MASKED_CARD.exec(line))
 }
 
-function descriptionBeforeDate(line: string, next?: string): boolean {
-  return next !== undefined
-    && !DATE.test(line)
-    && !HAS_AMOUNT.test(line)
-    && /\p{L}/u.test(line)
-    && !isHeaderOrNoise(line)
-    && DATE.test(next)
+function isCompleteLine(line: string): boolean {
+  return DATE.test(line) && HAS_AMOUNT.test(line)
+}
+
+function isOrphanFragment(line: string): boolean {
+  if (isCompleteLine(line)) return false
+  if (DATE_ONLY.test(line) || FRACTION_ONLY.test(line) || PARCEL_FRAGMENT.test(line) || AMOUNT_ONLY.test(line)) return true
+  return !DATE.test(line) && !HAS_AMOUNT.test(line) && /\p{L}/u.test(line)
+}
+
+function canMergeFragment(previous: string | undefined, line: string): boolean {
+  if (!previous || isHeaderOrNoise(previous) || isHeaderOrNoise(line)) return false
+  if (isCompleteLine(previous) || isCompleteLine(line)) return false
+  if (HAS_AMOUNT.test(previous)) return false
+  return isOrphanFragment(line)
 }
 
 function reconstructInvoiceLines(rawLines: string[]): string[] {
   const normalized = rawLines.map(normalizeInvoiceLine).filter(Boolean)
   const lines: string[] = []
 
-  for (let index = 0; index < normalized.length; index += 1) {
-    let line = normalized[index]
-    if (descriptionBeforeDate(line, normalized[index + 1])) {
-      line = `${line} ${normalized[index + 1]}`
-      index += 1
-    }
-
+  for (const line of normalized) {
     const previous = lines[lines.length - 1]
-    const previousNeedsContinuation = previous !== undefined && !HAS_AMOUNT.test(previous) && !isHeaderOrNoise(previous)
-    const isFragment = DATE_ONLY.test(line)
-      || ((FRACTION_ONLY.test(line) || PARCEL_FRAGMENT.test(line)) && previousNeedsContinuation)
-      || (AMOUNT_ONLY.test(line) && previousNeedsContinuation)
-      || (!DATE.test(line) && previousNeedsContinuation)
-
-    if (isFragment && previousNeedsContinuation) {
+    if (canMergeFragment(previous, line)) {
       lines[lines.length - 1] = normalizeInvoiceLine(`${previous} ${line}`)
     } else {
       lines.push(line)
@@ -153,10 +150,10 @@ function purchaseDateFrom(day: number, month: number, invoiceMonth: string): str
 }
 
 function parseTransactionLine(line: string, index: number, invoiceMonth: string, source?: string): InvoiceItemDraft | null {
-  if (!line || PHONE.test(line)) return null
+  if (!line) return null
 
   const descriptionOnly = line.replace(DATE, ' ')
-  if (IGNORE_LINE.test(line) || IGNORE_LINE.test(descriptionOnly)) return null
+  if (INSTITUTIONAL_LINE.test(line) || INSTITUTIONAL_LINE.test(descriptionOnly)) return null
 
   const fractions = fractionsIn(line)
   const installmentFraction = fractions.find(

@@ -9,7 +9,7 @@ import {
 } from 'lucide-react'
 import { cardCommitment, cardDueDate } from '../lib/invoices'
 import { formatDate, todayIso } from '../lib/dates'
-import { formatBRL } from '../lib/money'
+import { usePrivacy } from '../lib/privacy'
 import type { AppState, CreditCard } from '../types'
 
 interface CartoesProps {
@@ -22,6 +22,7 @@ interface CartoesProps {
 }
 
 export function Cartoes({ state, onAdd, onEdit, onDelete, onImportPdf, onManual }: CartoesProps) {
+  const { formatBRL: formatMoney } = usePrivacy()
   const defaultMonth = todayIso().slice(0, 7)
   const [months, setMonths] = useState<Record<string, string>>({})
   const currentDate = new Date()
@@ -56,15 +57,15 @@ export function Cartoes({ state, onAdd, onEdit, onDelete, onImportPdf, onManual 
       <div className="card mb-5 grid grid-cols-1 gap-5 p-5 sm:grid-cols-3 sm:p-6">
         <div>
           <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Limite total</p>
-          <p className="money mt-1 text-xl font-extrabold text-slate-900">{formatBRL(totals.limit)}</p>
+          <p className="money mt-1 text-xl font-extrabold text-slate-900">{formatMoney(totals.limit)}</p>
         </div>
         <div>
           <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Comprometido</p>
-          <p className="money mt-1 text-xl font-extrabold text-[#1E3A5F]">{formatBRL(totals.committed)}</p>
+          <p className="money mt-1 text-xl font-extrabold text-[#1E3A5F]">{formatMoney(totals.committed)}</p>
         </div>
         <div>
           <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Limite disponível</p>
-          <p className="money mt-1 text-xl font-extrabold text-moss-dark">{formatBRL(totals.available)}</p>
+          <p className="money mt-1 text-xl font-extrabold text-moss-dark">{formatMoney(totals.available)}</p>
         </div>
       </div>
 
@@ -96,7 +97,7 @@ export function Cartoes({ state, onAdd, onEdit, onDelete, onImportPdf, onManual 
                     </span>
                     <div className="min-w-0">
                       <h3 className="truncate text-base font-extrabold text-slate-900">{card.name}</h3>
-                      <p className="money text-xs text-slate-400">limite de {formatBRL(card.limitCents)}</p>
+                      <p className="money text-xs text-slate-400">limite de {formatMoney(card.limitCents)}</p>
                     </div>
                   </div>
                   <button
@@ -114,12 +115,12 @@ export function Cartoes({ state, onAdd, onEdit, onDelete, onImportPdf, onManual 
                     <div>
                       <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Disponível</p>
                       <p className={`money mt-0.5 text-xl font-extrabold ${commitment.exceeded ? 'text-rose-700' : 'text-moss-dark'}`}>
-                        {formatBRL(commitment.availableCents)}
+                        {formatMoney(commitment.availableCents)}
                       </p>
                     </div>
                     <div className="text-right">
                       <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Comprometido</p>
-                      <p className="money mt-0.5 text-sm font-bold text-slate-700">{formatBRL(commitment.committedCents)}</p>
+                      <p className="money mt-0.5 text-sm font-bold text-slate-700">{formatMoney(commitment.committedCents)}</p>
                     </div>
                   </div>
                   <div className="mt-2 flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-400">

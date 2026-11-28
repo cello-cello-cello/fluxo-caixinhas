@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { BarChart3, CalendarRange, ChevronLeft, ChevronRight, CreditCard as CreditCardIcon, Database, PiggyBank } from 'lucide-react'
+import { BarChart3, CalendarRange, ChevronLeft, ChevronRight, CreditCard as CreditCardIcon, Database, Eye, EyeOff, PiggyBank } from 'lucide-react'
 import { Caixinhas } from './components/Caixinhas'
 import { CaixinhaModal } from './components/CaixinhaModal'
 import { CartaoModal } from './components/CartaoModal'
@@ -20,6 +20,7 @@ import { daysInMonth, isoDate, todayIso } from './lib/dates'
 import { parseInvoiceDocument } from './lib/invoices'
 import type { InstallmentFilter, InvoiceItemDraft, InvoiceParseResult } from './lib/invoices'
 import { pdfPasswordIssue } from './lib/pdfPassword'
+import { loadPrivacyMode, PrivacyContext, privacyFormatter, savePrivacyMode } from './lib/privacy'
 import {
   createDemoState,
   createId,
@@ -28,11 +29,14 @@ import {
   exportBoxesCsv,
   exportJson,
   exportTransactionsCsv,
+  loadBackupInfo,
   loadState,
+  markBackup,
   parseJsonImport,
   parseTransactionsCsv,
   saveState,
 } from './lib/storage'
+import type { BackupInfo } from './lib/storage'
 import type { AppState, Box, CardInvoice, CreditCard, RecurrenceChange, Transaction, TransactionType } from './types'
 
 type Tab = 'fluxo' | 'caixinhas' | 'cartoes' | 'graficos' | 'dados'
@@ -76,6 +80,28 @@ function monthKeyFromIndex(index: number): string {
   const year = Math.floor(index / 12)
   const month = (index % 12) + 1
   return `${year}-${String(month).padStart(2, '0')}`
+}
+
+async function copyText(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+      return true
+    }
+
+    const field = document.createElement('textarea')
+    field.value = text
+    field.setAttribute('readonly', '')
+    field.style.position = 'fixed'
+    field.style.opacity = '0'
+    document.body.appendChild(field)
+    field.select()
+    const copied = document.execCommand?.('copy') ?? false
+    document.body.removeChild(field)
+    return copied
+  } catch {
+    return false
+  }
 }
 
 function buildAutoContribution(box: Box, stateYear: number): Transaction | null {
@@ -138,7 +164,23 @@ export default function App() {
   const [passwordDraft, setPasswordDraft] = useState<PasswordDraft | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   const [showSplash, setShowSplash] = useState(true)
+  const [privacyHidden, setPrivacyHidden] = useState(loadPrivacyMode)
+  const [backupInfo, setBackupInfo] = useState<BackupInfo | null>(() => loadBackupInfo())
   const finishSplash = useCallback(() => setShowSplash(false), [])
+
+  const togglePrivacy = useCallback(() => {
+    setPrivacyHidden((previous) => {
+      const next = !previous
+      savePrivacyMode(next)
+      return next
+    })
+  }, [])
+
+  const privacy = useMemo(() => ({
+    hidden: privacyHidden,
+    toggle: togglePrivacy,
+    ...privacyFormatter(privacyHidden),
+  }), [privacyHidden, togglePrivacy])
 
   useEffect(() => {
     if (demoBackup) return
@@ -398,6 +440,34 @@ export default function App() {
     setToast('JSON importado com sucesso.')
   }
 
+  function exportJsonBackup() {
+    downloadTextFile(`fluxo-caixinhas-${todayIso()}.json`, exportJson(state), 'application/json')
+    setBackupInfo(markBackup('export'))
+  }
+
+  async function copyBackup(): Promise<boolean> {
+    const copied = await copyText(exportJson(state))
+    if (!copied) {
+      setToast('Não foi possível copiar o backup neste navegador.')
+      return false
+    }
+    setBackupInfo(markBackup('copy'))
+    setToast('Backup copiado para a área de transferência.')
+    return true
+  }
+
+  function pasteBackup(text: string): boolean {
+    const imported = parseJsonImport(text.trim())
+    if (!imported) {
+      setToast('Texto de backup inválido. Nada foi alterado.')
+      return false
+    }
+    setState(imported)
+    setFocusedMonth(new Date().getMonth())
+    setToast('Backup restaurado com sucesso.')
+    return true
+  }
+
   async function importCsv(file: File) {
     const parsed = parseTransactionsCsv(await file.text(), state)
     if (!parsed) {
@@ -427,6 +497,7 @@ export default function App() {
   }
 
   return (
+    <PrivacyContext.Provider value={privacy}>
     <div className="min-h-screen bg-[#F5F7FA] text-slate-900">
       <header className="sticky top-0 z-20 border-b border-[#E6EAF0] bg-white/90 backdrop-blur-xl">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3.5 sm:px-6">
@@ -435,7 +506,18 @@ export default function App() {
             <h1 className="truncate text-lg font-extrabold leading-tight tracking-tight">Fluxo</h1>
           </div>
 
-          <div className="flex items-center gap-1 rounded-2xl border border-[#E6EAF0] bg-white p-1 shadow-soft">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={privacy.toggle}
+              aria-label={privacy.hidden ? 'Mostrar valores' : 'Ocultar valores'}
+              aria-pressed={privacy.hidden}
+              title={privacy.hidden ? 'Mostrar valores' : 'Ocultar valores'}
+              className="grid h-10 w-10 place-items-center rounded-2xl border border-[#E6EAF0] bg-white text-slate-500 shadow-soft transition hover:text-slate-900"
+            >
+              {privacy.hidden ? <EyeOff size={17} /> : <Eye size={17} />}
+            </button>
+            <div className="flex items-center gap-1 rounded-2xl border border-[#E6EAF0] bg-white p-1 shadow-soft">
             <button
               type="button"
               onClick={() => changeYear(-1)}
@@ -453,6 +535,7 @@ export default function App() {
             >
               <ChevronRight size={17} />
             </button>
+            </div>
           </div>
         </div>
       </header>
@@ -535,9 +618,10 @@ export default function App() {
             onSettings={updateSettings}
             onImportJson={importJson}
             onImportCsv={importCsv}
-            onExportJson={() =>
-              downloadTextFile(`fluxo-caixinhas-${todayIso()}.json`, exportJson(state), 'application/json')
-            }
+            onExportJson={exportJsonBackup}
+            onCopyBackup={copyBackup}
+            onPasteBackup={pasteBackup}
+            backupInfo={backupInfo}
             onExportTransactionsCsv={() =>
               downloadTextFile(`lancamentos-${state.year}.csv`, exportTransactionsCsv(state), 'text/csv')
             }
@@ -640,5 +724,6 @@ export default function App() {
 
       {showSplash && <SplashScreen onFinish={finishSplash} />}
     </div>
+    </PrivacyContext.Provider>
   )
 }

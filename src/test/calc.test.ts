@@ -3,6 +3,7 @@ import {
   applyRecurrenceChange,
   availableFor,
   calculateAnnualFlow,
+  calculateBreathingRoom,
   calculatePosition,
   expandTransactions,
   getCurrentPosition,
@@ -407,6 +408,58 @@ describe('fluxo de caixa encadeado', () => {
     expect(flow.months[0].days[28].expenseCents).toBe(1_000)
     expect(flow.months[1].days[25].expenseCents).toBe(1_000)
     expect(flow.totalExpenseCents).toBe(12_000)
+  })
+})
+
+describe('respiro', () => {
+  it('calcula a folga imediatamente antes da próxima entrada', () => {
+    const state = createInitialState(2026)
+    state.initialBalanceCents = 100_000
+    state.transactions = [
+      transaction({ id: 'a-conta', date: '2026-01-03', type: 'saida', amountCents: 20_000 }),
+      transaction({ id: 'b-salario', date: '2026-01-05', type: 'entrada', amountCents: 50_000 }),
+      transaction({ id: 'a-taxa', date: '2026-01-05', type: 'saida', amountCents: 5_000 }),
+    ]
+
+    const flow = calculateAnnualFlow(state, 2026)
+
+    expect(calculateBreathingRoom(flow, 0, '2026-02-01')).toEqual({
+      date: '2026-01-05',
+      amountCents: 75_000,
+      hasIncome: true,
+    })
+  })
+
+  it('começa do dia atual quando o mês selecionado é o atual', () => {
+    const state = createInitialState(2026)
+    state.initialBalanceCents = 100_000
+    state.transactions = [
+      transaction({ date: '2026-01-02', type: 'entrada', amountCents: 50_000 }),
+      transaction({ date: '2026-01-06', type: 'saida', amountCents: 10_000 }),
+      transaction({ date: '2026-01-10', type: 'entrada', amountCents: 50_000 }),
+    ]
+
+    const flow = calculateAnnualFlow(state, 2026)
+
+    expect(calculateBreathingRoom(flow, 0, '2026-01-06')).toEqual({
+      date: '2026-01-10',
+      amountCents: 140_000,
+      hasIncome: true,
+    })
+  })
+
+  it('usa o fechamento do mês quando não há próxima entrada', () => {
+    const state = createInitialState(2026)
+    state.initialBalanceCents = 100_000
+    state.transactions = [transaction({ date: '2026-01-10', type: 'saida', amountCents: 15_000 })]
+
+    const flow = calculateAnnualFlow(state, 2026)
+
+    expect(calculateBreathingRoom(flow, 0, '2026-02-01')).toEqual({
+      date: '2026-01-31',
+      amountCents: 85_000,
+      hasIncome: false,
+    })
   })
 })
 

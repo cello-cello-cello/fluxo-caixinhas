@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import App from '../App'
-import { formatFriendlyDate, isoDate, MONTH_NAMES } from '../lib/dates'
+import { formatDate, formatFriendlyDate, isoDate, MONTH_NAMES } from '../lib/dates'
 import { buildInstallmentTransactions } from '../lib/invoices'
 import { readPdfInvoiceLines } from '../lib/pdfInvoice'
 import { formatBRL } from '../lib/money'
@@ -92,6 +92,59 @@ describe('aplicação', () => {
 
     expect(screen.getByRole('heading', { name: /Dezembro/ })).toBeInTheDocument()
     expect(nextMonth).toBeDisabled()
+  })
+
+  it('arrasta a faixa de meses sem disparar clique e mantém as setinhas', () => {
+    render(<App />)
+
+    const strip = screen.getByTestId('month-strip') as HTMLDivElement
+    const currentMonth = new Date().getMonth()
+    const otherMonth = (currentMonth + 1) % 12
+    const otherMonthButton = screen.getByRole('button', { name: new RegExp(`^${MONTH_NAMES[otherMonth]}:`) })
+    const currentHeading = screen.getByRole('heading', { name: new RegExp(MONTH_NAMES[currentMonth]) })
+
+    expect(screen.getByRole('button', { name: 'Mês anterior' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Próximo mês' })).toBeInTheDocument()
+    strip.scrollLeft = 0
+
+    fireEvent.mouseDown(strip, { button: 0, clientX: 200 })
+    expect(strip).toHaveClass('cursor-grabbing', 'select-none')
+    fireEvent.mouseMove(strip, { clientX: 180 })
+    expect(strip.scrollLeft).toBe(20)
+    fireEvent.mouseUp(strip)
+    expect(strip).toHaveClass('cursor-grab')
+
+    fireEvent.click(otherMonthButton)
+    expect(currentHeading).toBeInTheDocument()
+  })
+
+  it('mantém o clique simples na faixa de meses', () => {
+    render(<App />)
+
+    const otherMonth = (new Date().getMonth() + 1) % 12
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${MONTH_NAMES[otherMonth]}:`) }))
+
+    expect(screen.getByRole('heading', { name: new RegExp(MONTH_NAMES[otherMonth]) })).toBeInTheDocument()
+  })
+
+  it('mostra o card Respiro com a folga até a próxima entrada', () => {
+    const year = 2020
+    const month = new Date().getMonth()
+    const state = createInitialState(year)
+    state.initialBalanceCents = 100_000
+    state.transactions = [
+      { id: 'conta', date: isoDate(year, month, 2), description: 'Conta', category: 'Outros', type: 'saida', amountCents: 10_000 },
+      { id: 'salario', date: isoDate(year, month, 5), description: 'Salário', category: 'Salário', type: 'entrada', amountCents: 50_000 },
+    ]
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+
+    render(<App />)
+
+    const card = screen.getByLabelText('Respiro')
+    expect(within(card).getByText('Respiro')).toBeInTheDocument()
+    expect(within(card).getByText(`Próxima entrada · ${formatDate(isoDate(year, month, 5))}`)).toBeInTheDocument()
+    expect(within(card).getByText(/900,00/)).toBeInTheDocument()
+    expect(within(card).getByText('Tranquilo')).toBeInTheDocument()
   })
 
   it('mostra o dia da semana em português abaixo dos dias', () => {
@@ -790,6 +843,47 @@ describe('aplicação', () => {
     expect(saved.transactions).toHaveLength(0)
     expect(saved.cardInvoices[0].totalCents).toBe(3_050)
     expect(saved.cardInvoices[0].items[0]).toMatchObject({ kind: 'encargo', source: 'Final 8018' })
+  })
+
+  it('permite editar data da compra e salvar mesmo com total divergente', async () => {
+    const year = new Date().getFullYear()
+    const state = createInitialState(year)
+    state.cards = [{ id: 'c1', name: 'Nubank', limitCents: 100_000, closingDay: 10, dueDay: 15 }]
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+    readPdfMock.mockResolvedValue([
+      'Cartão final 8018',
+      '15/10 LOJA 16,26',
+      'VALOR TOTAL R$ 20,00',
+    ])
+
+    render(<App />)
+    fireEvent.click(screen.getAllByRole('button', { name: 'Cartões' })[0])
+    fireEvent.change(screen.getByLabelText('Importar fatura PDF de Nubank'), {
+      target: { files: [new File(['pdf'], 'fatura.pdf', { type: 'application/pdf' })] },
+    })
+
+    const dialog = await screen.findByRole('dialog')
+    await waitFor(() => expect(within(dialog).getByDisplayValue('LOJA')).toBeInTheDocument())
+    expect(within(dialog).getByText(/Diferença de/)).toBeInTheDocument()
+    expect(within(dialog).getByText(/salvar assim mesmo/)).toBeInTheDocument()
+
+    fireEvent.change(within(dialog).getByLabelText('Data da compra'), { target: { value: `${year}-10-15` } })
+    fireEvent.change(within(dialog).getByLabelText('Descrição'), { target: { value: 'LOJA AJUSTADA' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Salvar fatura e parcelas' }))
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as {
+      cardInvoices: Array<{
+        totalCents?: number
+        items: Array<{ description: string; purchaseDate?: string; amountCents: number }>
+      }>
+    }
+    expect(saved.cardInvoices[0].totalCents).toBe(2_000)
+    expect(saved.cardInvoices[0].items[0]).toMatchObject({
+      description: 'LOJA AJUSTADA',
+      purchaseDate: `${year}-10-15`,
+      amountCents: 1_626,
+    })
   })
 
   it('aplica o filtro de mês inicial e permite conferir linhas e texto bruto', async () => {

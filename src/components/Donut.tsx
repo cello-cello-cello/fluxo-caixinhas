@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { CHART_COLORS } from '../lib/constants'
-import { formatBRL, formatBRLCompact } from '../lib/money'
+import { usePrivacy } from '../lib/privacy'
 
 interface DonutSegment {
   label: string
@@ -17,6 +17,7 @@ interface DonutProps {
 }
 
 export function Donut({ segments, title, subtitle, control, fullTotal = false }: DonutProps) {
+  const { formatBRL: formatMoney, formatBRLCompact: formatMoneyCompact } = usePrivacy()
   const size = 176
   const stroke = 22
   const radius = (size - stroke) / 2
@@ -68,7 +69,7 @@ export function Donut({ segments, title, subtitle, control, fullTotal = false }:
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Total</p>
               <p className="money mt-1 text-lg font-extrabold text-[#0F2942]">
-                {fullTotal ? formatBRL(total) : formatBRLCompact(total)}
+                {fullTotal ? formatMoney(total) : formatMoneyCompact(total)}
               </p>
             </div>
           </div>
@@ -84,7 +85,7 @@ export function Donut({ segments, title, subtitle, control, fullTotal = false }:
                   style={{ backgroundColor: segment.color }}
                 />
                 <span className="min-w-0 flex-1 truncate text-sm text-slate-600">{segment.label}</span>
-                <span className="money text-sm font-bold text-[#0F2942]">{formatBRL(segment.value)}</span>
+                <span className="money text-sm font-bold text-[#0F2942]">{formatMoney(segment.value)}</span>
                 <span className="money w-9 text-right text-xs font-semibold text-[#1E3A5F]">{percent}%</span>
               </div>
             )

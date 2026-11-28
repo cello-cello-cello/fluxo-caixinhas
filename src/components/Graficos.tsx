@@ -3,7 +3,7 @@ import { Donut } from './Donut'
 import { calculatePosition, expandTransactions } from '../lib/calc'
 import { categoryColor, CHART_COLORS } from '../lib/constants'
 import { daysInMonth, isoDate, MONTH_NAMES, MONTH_SHORT } from '../lib/dates'
-import { formatBRL } from '../lib/money'
+import { usePrivacy } from '../lib/privacy'
 import type { AnnualFlow, AppState } from '../types'
 
 interface GraficosProps {
@@ -24,6 +24,7 @@ function defaultMonth(year: number, dates: string[]): number {
 }
 
 export function Graficos({ state, flow }: GraficosProps) {
+  const { formatBRL: formatMoney } = usePrivacy()
   const [period, setPeriod] = useState<Period>('mes')
   const expandedTransactions = useMemo(() => expandTransactions(state.transactions), [state.transactions])
   const categoryTransactions = useMemo(
@@ -143,7 +144,7 @@ export function Graficos({ state, flow }: GraficosProps) {
                     />
                   </div>
                   <span className="money w-20 text-right text-[10px] font-bold text-[#3A5743]">
-                    {formatBRL(month.incomeCents)}
+                    {formatMoney(month.incomeCents)}
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -154,7 +155,7 @@ export function Graficos({ state, flow }: GraficosProps) {
                     />
                   </div>
                   <span className="money w-20 text-right text-[10px] font-bold text-[#A64B39]">
-                    {formatBRL(month.expenseCents)}
+                    {formatMoney(month.expenseCents)}
                   </span>
                 </div>
               </div>

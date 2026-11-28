@@ -4,7 +4,8 @@ import { ArrowDownLeft, ArrowUpRight, Pencil, PiggyBank, Trash2, Undo2, X } from
 import { availableFor, expandTransactions, occurrenceMonthKey, resolveBaseId } from '../lib/calc'
 import { CATEGORIES, TRANSACTION_TYPES } from '../lib/constants'
 import { formatDate, formatFriendlyDate, isoDate, MONTH_NAMES, parseIsoDate, previousBusinessDayIso } from '../lib/dates'
-import { centsToInput, formatBRL, formatBRLCompact, parseAmountToCents } from '../lib/money'
+import { centsToInput, parseAmountToCents } from '../lib/money'
+import { usePrivacy } from '../lib/privacy'
 import { createId } from '../lib/storage'
 import type { AppState, RecurrenceChange, RecurrenceScope, Transaction, TransactionType } from '../types'
 
@@ -87,6 +88,7 @@ export function LancamentoModal({
   onSave,
   onDelete,
 }: LancamentoModalProps) {
+  const { formatBRL: formatMoney, formatBRLCompact: formatMoneyCompact } = usePrivacy()
   const initialBaseId = transaction?.sourceId ?? transaction?.id ?? null
   const initialBase = transaction
     ? state.transactions.find((candidate) => candidate.id === initialBaseId) ?? transaction
@@ -210,10 +212,10 @@ export function LancamentoModal({
     if (isTransfer && !boxId) return setError('Selecione uma caixinha.')
 
     if (type === 'guardar' && amountCents > available.freeCents) {
-      return setError(`Saldo livre insuficiente. Disponível: ${formatBRL(available.freeCents)}.`)
+      return setError(`Saldo livre insuficiente. Disponível: ${formatMoney(available.freeCents)}.`)
     }
     if (type === 'resgatar' && amountCents > available.boxCents) {
-      return setError(`A caixinha tem apenas ${formatBRL(available.boxCents)} disponíveis.`)
+      return setError(`A caixinha tem apenas ${formatMoney(available.boxCents)} disponíveis.`)
     }
 
     onSave(
@@ -332,11 +334,11 @@ export function LancamentoModal({
           </div>
 
           <div className="mt-2 flex flex-wrap gap-1.5">
-            <span className="chip money bg-[#EEF4F0] text-[#3A5743]">Entradas {formatBRLCompact(dayIncome)}</span>
-            <span className="chip money bg-[#FFF3EF] text-[#A64B39]">Saídas {formatBRLCompact(dayExpense)}</span>
+            <span className="chip money bg-[#EEF4F0] text-[#3A5743]">Entradas {formatMoneyCompact(dayIncome)}</span>
+            <span className="chip money bg-[#FFF3EF] text-[#A64B39]">Saídas {formatMoneyCompact(dayExpense)}</span>
             {(dayToBox > 0 || dayFromBox > 0) && (
               <span className="chip money bg-[#E9EFF5] text-[#1E3A5F]">
-                Caixinhas {formatBRLCompact(dayToBox)} guard. / {formatBRLCompact(dayFromBox)} resg.
+                Caixinhas {formatMoneyCompact(dayToBox)} guard. / {formatMoneyCompact(dayFromBox)} resg.
               </span>
             )}
           </div>
@@ -371,7 +373,7 @@ export function LancamentoModal({
                     </div>
                     <span className={`money shrink-0 text-xs font-extrabold sm:text-sm ${style.text}`}>
                       {positive ? '+ ' : '− '}
-                      {formatBRL(item.amountCents)}
+                      {formatMoney(item.amountCents)}
                     </span>
                     <button
                       type="button"
@@ -612,15 +614,15 @@ export function LancamentoModal({
                 >
                   {state.boxes.map((box) => (
                     <option key={box.id} value={box.id}>
-                      {box.name} · {formatBRL(availableFor(state, effectiveDate, box.id, editingId ?? undefined).boxCents)}
+                      {box.name} · {formatMoney(availableFor(state, effectiveDate, box.id, editingId ?? undefined).boxCents)}
                     </option>
                   ))}
                 </select>
               )}
               <p className="money mt-2 text-xs text-slate-400">
                 {type === 'guardar'
-                  ? `Saldo livre disponível: ${formatBRLCompact(available.freeCents)}`
-                  : `Disponível na caixinha: ${formatBRLCompact(available.boxCents)}`}
+                  ? `Saldo livre disponível: ${formatMoneyCompact(available.freeCents)}`
+                  : `Disponível na caixinha: ${formatMoneyCompact(available.boxCents)}`}
               </p>
             </div>
           )}

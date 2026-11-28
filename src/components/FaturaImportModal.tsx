@@ -4,7 +4,8 @@ import { ChevronDown, Plus, Trash2, X } from 'lucide-react'
 import { classifyInvoiceItem, countPlannedTransactions, installmentDueDate } from '../lib/invoices'
 import type { InstallmentFilter, InvoiceItemDraft } from '../lib/invoices'
 import { formatDate, isValidIsoDate } from '../lib/dates'
-import { centsToInput, formatBRL, parseAmountToCents } from '../lib/money'
+import { centsToInput, parseAmountToCents } from '../lib/money'
+import { usePrivacy } from '../lib/privacy'
 import { createId } from '../lib/storage'
 import type { CreditCard, InvoiceItemKind } from '../types'
 
@@ -37,6 +38,7 @@ function parseSignedAmount(raw: string): number | null {
 }
 
 export function FaturaImportModal({ card, invoiceMonth, items, rawText, invoiceTotalCents, onClose, onSave }: FaturaImportModalProps) {
+  const { formatBRL: formatMoney } = usePrivacy()
   const [year, month] = invoiceMonth.split('-').map(Number)
   const defaultDueDate = card.dueDate ?? installmentDueDate(card, year, Math.max(0, month - 1))
   const [rows, setRows] = useState<DraftRow[]>(() => items.map((item) => ({
@@ -150,6 +152,9 @@ export function FaturaImportModal({ card, invoiceMonth, items, rawText, invoiceT
       if (!Number.isInteger(currentInstallment) || currentInstallment < 1 || currentInstallment > installmentCount) {
         return setError('A parcela atual deve estar entre 1 e o total de parcelas.')
       }
+      if (row.purchaseDate && !isValidIsoDate(row.purchaseDate)) {
+        return setError('Informe uma data de compra válida.')
+      }
       if (!isValidIsoDate(row.dueDate)) return setError('Informe uma data de vencimento válida.')
 
       parsed.push({
@@ -259,19 +264,19 @@ export function FaturaImportModal({ card, invoiceMonth, items, rawText, invoiceT
               <div>
                 <p className="label">Total lido no PDF</p>
                 <p className="money mt-1 text-sm font-bold text-slate-700">
-                  {invoiceTotalCents !== undefined ? formatBRL(invoiceTotalCents) : 'Não detectado'}
+                  {invoiceTotalCents !== undefined ? formatMoney(invoiceTotalCents) : 'Não detectado'}
                 </p>
               </div>
               <div>
                 <p className="label">Total selecionado</p>
-                <p className="money mt-1 text-sm font-bold text-navy">{formatBRL(selectedTotalCents)}</p>
+                <p className="money mt-1 text-sm font-bold text-navy">{formatMoney(selectedTotalCents)}</p>
               </div>
             </div>
             {totalDifferenceCents !== undefined && (
               <p className={`mt-2 text-[11px] font-bold ${totalDifferenceCents === 0 ? 'text-moss-dark' : 'text-rose-700'}`}>
                 {totalDifferenceCents === 0
                   ? 'Conferência OK: selecionado = total da fatura.'
-                  : `Diferença de ${formatBRL(Math.abs(totalDifferenceCents))} (${totalDifferenceCents > 0 ? 'acima' : 'abaixo'} do total).`}
+                  : `Diferença de ${formatMoney(Math.abs(totalDifferenceCents))} (${totalDifferenceCents > 0 ? 'acima' : 'abaixo'} do total). Você pode revisar e salvar assim mesmo.`}
               </p>
             )}
           </div>
@@ -331,6 +336,16 @@ export function FaturaImportModal({ card, invoiceMonth, items, rawText, invoiceT
               </div>
               <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
                 <div>
+                  <label className="label" htmlFor={`fatura-compra-${row.id}`}>Data da compra</label>
+                  <input
+                    id={`fatura-compra-${row.id}`}
+                    type="date"
+                    className="field money !py-2 text-sm"
+                    value={row.purchaseDate ?? ''}
+                    onChange={(event) => updateRow(row.id, { purchaseDate: event.target.value || undefined })}
+                  />
+                </div>
+                <div>
                   <label className="label" htmlFor={`fatura-atual-${row.id}`}>Parcela atual</label>
                   <input
                     id={`fatura-atual-${row.id}`}
@@ -352,7 +367,7 @@ export function FaturaImportModal({ card, invoiceMonth, items, rawText, invoiceT
                     onChange={(event) => updateRow(row.id, { installmentCount: Number(event.target.value) })}
                   />
                 </div>
-                <div className="col-span-2">
+                <div>
                   <label className="label" htmlFor={`fatura-vencimento-${row.id}`}>Vencimento</label>
                   <input
                     id={`fatura-vencimento-${row.id}`}

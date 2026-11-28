@@ -67,7 +67,7 @@ describe('importação da fatura', () => {
     })
   })
 
-  it('normaliza faturas do Santander e ignora linhas que não são lançamentos', () => {
+  it('normaliza faturas do Santander e ignora apenas linhas institucionais', () => {
     const parsed = parseInvoiceDocument([
       'Cartão final 4761',
       'Compras',
@@ -79,7 +79,7 @@ describe('importação da fatura', () => {
 
     expect(parsed.sections).toEqual(['Final 4761', 'Compras'])
     expect(parsed.rawText).toContain('15/10 COMPRA PARCELADA 02/06 30,50')
-    expect(parsed.items).toHaveLength(2)
+    expect(parsed.items).toHaveLength(3)
     expect(parsed.items[0]).toMatchObject({
       description: 'COMPRA',
       amountCents: 3_050,
@@ -96,6 +96,69 @@ describe('importação da fatura', () => {
       kind: 'credito',
       source: 'Final 4761 · Compras',
     })
+    expect(parsed.items[2]).toMatchObject({
+      description: '4000 1234 SUPERMERCADO',
+      amountCents: 2_000,
+      currentInstallment: 1,
+      installmentCount: 1,
+      purchaseDate: '2026-10-15',
+      source: 'Final 4761 · Compras',
+    })
+  })
+
+  it('não funde linhas completas e converte vírgula, ponto decimal e sinal negativo', () => {
+    const parsed = parseInvoiceDocument([
+      '15/10 LOJA A R$ 16,26',
+      '16/10 LOJA B 30.50',
+      '17/10 PAGAMENTO -531,71',
+    ], '2026-11')
+
+    expect(parsed.items).toHaveLength(3)
+    expect(parsed.items.map((item) => item.amountCents)).toEqual([1_626, 3_050, -53_171])
+    expect(parsed.items.map((item) => item.description)).toEqual(['LOJA A', 'LOJA B', 'Crédito da fatura'])
+    expect(parsed.items[2].kind).toBe('credito')
+    expect(parsed.rawText).not.toContain('LOJA A 16/10')
+  })
+
+  it('junta apenas continuação órfã e preserva a linha completa seguinte', () => {
+    const parsed = parseInvoiceDocument([
+      'CAFÉ @',
+      'DA ESQUINA',
+      '15/10',
+      'parc. 02/06',
+      '16,26',
+      '17/10 OUTRA LOJA 30.50',
+    ], '2026-11')
+
+    expect(parsed.items).toHaveLength(2)
+    expect(parsed.items[0]).toMatchObject({
+      description: 'CAFÉ DA ESQUINA',
+      amountCents: 1_626,
+      currentInstallment: 2,
+      installmentCount: 6,
+      purchaseDate: '2026-10-15',
+    })
+    expect(parsed.items[1]).toMatchObject({
+      description: 'OUTRA LOJA',
+      amountCents: 3_050,
+      purchaseDate: '2026-10-17',
+    })
+  })
+
+  it('descarta só cabeçalho/rodapé institucional e mantém compras com palavras de tarifa', () => {
+    const parsed = parseInvoiceDocument([
+      '15/10 TAXA DE ENTREGA R$ 5,00',
+      '15/10 JARDIM 12,34',
+      'SAC 0800 123 4567',
+      'Ouvidoria 0800 111 2222',
+      'Endereço Rua Teste, 123',
+      'CET R$ 1,00',
+      'Resumo da Fatura VALOR TOTAL R$ 17,34',
+    ], '2026-11')
+
+    expect(parsed.items.map((item) => item.description)).toEqual(['TAXA DE ENTREGA', 'JARDIM'])
+    expect(parsed.items.map((item) => item.amountCents)).toEqual([500, 1_234])
+    expect(parsed.totalCents).toBe(1_734)
   })
 
   it('reconstrói linhas quebradas, remove ruído e preserva letras acentuadas', () => {

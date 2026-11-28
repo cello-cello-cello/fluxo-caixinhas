@@ -5,6 +5,12 @@ import { classifyInvoiceItem } from './invoices'
 import type { AppState, Box, CardInvoice, CardInvoiceItem, CreditCard, InvoiceItemKind, Transaction, TransactionType } from '../types'
 
 const STORAGE_KEY = 'fluxo-caixinhas:v1'
+const BACKUP_KEY = 'fluxo-caixinhas:backup'
+export type BackupKind = 'export' | 'copy'
+export interface BackupInfo {
+  at: string
+  kind: BackupKind
+}
 const VALID_TYPES: TransactionType[] = ['entrada', 'saida', 'guardar', 'resgatar']
 const VALID_INVOICE_KINDS: InvoiceItemKind[] = ['vista', 'parcela', 'credito', 'encargo']
 
@@ -416,6 +422,31 @@ export function sanitizeState(value: unknown): AppState | null {
     cardInvoices,
     transactions: transactions.filter((item) => !(item.cardId && item.installmentGroupId)),
   }
+}
+
+export function loadBackupInfo(): BackupInfo | null {
+  if (typeof localStorage === 'undefined') return null
+  try {
+    const raw = localStorage.getItem(BACKUP_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<BackupInfo>
+    if ((parsed.kind !== 'export' && parsed.kind !== 'copy') || typeof parsed.at !== 'string') return null
+    if (Number.isNaN(Date.parse(parsed.at))) return null
+    return { at: parsed.at, kind: parsed.kind }
+  } catch {
+    return null
+  }
+}
+
+export function markBackup(kind: BackupKind): BackupInfo {
+  const info: BackupInfo = { at: new Date().toISOString(), kind }
+  if (typeof localStorage === 'undefined') return info
+  try {
+    localStorage.setItem(BACKUP_KEY, JSON.stringify(info))
+  } catch {
+    return info
+  }
+  return info
 }
 
 export function loadState(): AppState {

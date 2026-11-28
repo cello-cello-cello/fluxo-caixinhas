@@ -4,7 +4,8 @@ import { boxTargetIso, findBestDepositDay, planBoxGoal, projectedBoxValue } from
 import type { BoxGoalPlan } from '../lib/boxes'
 import { expandTransactions } from '../lib/calc'
 import { formatDate, MONTH_NAMES } from '../lib/dates'
-import { formatBRL, formatPercent } from '../lib/money'
+import { formatPercent } from '../lib/money'
+import { usePrivacy } from '../lib/privacy'
 import type { AppState, Box, MonthFlow, Position, TransactionType } from '../types'
 
 interface CaixinhasProps {
@@ -19,6 +20,7 @@ interface CaixinhasProps {
 }
 
 export function Caixinhas({ state, position, monthFlow, onAdd, onEdit, onDelete, onTransfer, onUseBestDay }: CaixinhasProps) {
+  const { formatBRL: formatMoney } = usePrivacy()
   const cards = position.netWorthCents > 0 ? position.totalBoxCents / position.netWorthCents : 0
   const dailyFreeBalances = Object.fromEntries(monthFlow.days.map((day) => [day.day, day.balanceCents]))
   const daysInCurrentMonth = monthFlow.days.length
@@ -40,11 +42,11 @@ export function Caixinhas({ state, position, monthFlow, onAdd, onEdit, onDelete,
       <div className="card mb-5 grid grid-cols-2 gap-5 p-5 sm:grid-cols-3 sm:p-6">
         <div>
           <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Saldo livre</p>
-          <p className="money mt-1 text-xl font-extrabold text-slate-900">{formatBRL(position.freeBalanceCents)}</p>
+          <p className="money mt-1 text-xl font-extrabold text-slate-900">{formatMoney(position.freeBalanceCents)}</p>
         </div>
         <div>
           <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Em caixinhas</p>
-          <p className="money mt-1 text-xl font-extrabold text-[#1E3A5F]">{formatBRL(position.totalBoxCents)}</p>
+          <p className="money mt-1 text-xl font-extrabold text-[#1E3A5F]">{formatMoney(position.totalBoxCents)}</p>
         </div>
         <div className="col-span-2 sm:col-span-1">
           <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Parcela reservada</p>
@@ -73,7 +75,7 @@ export function Caixinhas({ state, position, monthFlow, onAdd, onEdit, onDelete,
             const plan = planBoxGoal(box, balance)
             const contributionCents = box.autoContributionCents ?? plan?.monthlyContributionCents ?? 0
             const suggestion = plan && !plan.achieved && contributionCents > 0
-              ? findBestDepositDay(contributionCents, dailyFreeBalances, daysInCurrentMonth)
+              ? findBestDepositDay(contributionCents, dailyFreeBalances, daysInCurrentMonth, formatMoney)
               : null
             const history = movements.filter((item) => item.boxId === box.id).slice(0, 5)
 
@@ -98,9 +100,9 @@ export function Caixinhas({ state, position, monthFlow, onAdd, onEdit, onDelete,
                         <Pencil size={15} />
                       </button>
                     </div>
-                    <p className="money mt-1 text-xl font-extrabold tracking-tight text-slate-900">{formatBRL(balance)}</p>
+                    <p className="money mt-1 text-xl font-extrabold tracking-tight text-slate-900">{formatMoney(balance)}</p>
                     <p className="money mt-1 text-xs text-slate-400">
-                      {box.goalCents > 0 ? `meta de ${formatBRL(box.goalCents)}` : 'sem meta definida'}
+                      {box.goalCents > 0 ? `meta de ${formatMoney(box.goalCents)}` : 'sem meta definida'}
                     </p>
                   </div>
                 </div>
@@ -115,14 +117,14 @@ export function Caixinhas({ state, position, monthFlow, onAdd, onEdit, onDelete,
                   {box.autoContributionCents ? (
                     <p className="money flex items-center gap-2 text-navy">
                       <Target size={14} />
-                      Aporte automático: {formatBRL(box.autoContributionCents)} · dia {box.autoContributionDay ?? 1}
+                      Aporte automático: {formatMoney(box.autoContributionCents)} · dia {box.autoContributionDay ?? 1}
                     </p>
                   ) : null}
                   {box.yieldRate !== undefined && (
                     <p className="money flex items-center gap-2 text-moss-dark">
                       <Sparkles size={14} />
-                      {formatPercent(box.yieldRate)} · projeção {formatBRL(projection)}
-                      {gain > 0 && <span className="money font-bold">(+{formatBRL(gain)})</span>}
+                      {formatPercent(box.yieldRate)} · projeção {formatMoney(projection)}
+                      {gain > 0 && <span className="money font-bold">(+{formatMoney(gain)})</span>}
                     </p>
                   )}
                   {!box.targetMonth && !box.targetDate && box.yieldRate === undefined && (
@@ -151,11 +153,11 @@ export function Caixinhas({ state, position, monthFlow, onAdd, onEdit, onDelete,
                     {!plan.achieved && (
                       <>
                         <p className="money mt-2 text-lg font-extrabold text-navy">
-                          {formatBRL(plan.monthlyContributionCents)}
+                          {formatMoney(plan.monthlyContributionCents)}
                           <span className="text-xs font-bold text-slate-400">{contributionPeriodLabel(plan)}</span>
                         </p>
                         <p className="money mt-0.5 text-[11px] text-slate-500">
-                          {goalDeadlineLabel(plan)} · {formatBRL(plan.remainingCents)} restantes
+                          {goalDeadlineLabel(plan)} · {formatMoney(plan.remainingCents)} restantes
                         </p>
                       </>
                     )}
@@ -195,7 +197,7 @@ export function Caixinhas({ state, position, monthFlow, onAdd, onEdit, onDelete,
                             {formatDate(item.date)} · {item.description}
                           </span>
                           <span className={`money shrink-0 font-bold ${item.type === 'guardar' ? 'text-navy' : 'text-moss-dark'}`}>
-                            {item.type === 'guardar' ? '+' : '−'} {formatBRL(item.amountCents)}
+                            {item.type === 'guardar' ? '+' : '−'} {formatMoney(item.amountCents)}
                           </span>
                         </li>
                       ))}

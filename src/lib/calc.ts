@@ -330,6 +330,52 @@ export function calculateAnnualFlow(state: AppState, year: number): AnnualFlow {
   }
 }
 
+export interface BreathingRoom {
+  date: string
+  amountCents: number
+  hasIncome: boolean
+}
+
+function flowDeltaCents(transaction: Transaction): number {
+  switch (transaction.type) {
+    case 'entrada':
+    case 'resgatar':
+      return transaction.amountCents
+    case 'saida':
+    case 'guardar':
+      return -transaction.amountCents
+  }
+}
+
+export function calculateBreathingRoom(flow: AnnualFlow, month: number, today = todayIso()): BreathingRoom {
+  const monthFlow = flow.months[month]
+  if (!monthFlow || monthFlow.days.length === 0) {
+    return { date: isoDate(flow.year, month, 1), amountCents: 0, hasIncome: false }
+  }
+
+  const todayParts = parseIsoDate(today)
+  const startDay = todayParts?.year === flow.year && todayParts.month === month ? todayParts.day : 1
+  const firstIndex = Math.max(0, Math.min(monthFlow.days.length - 1, startDay - 1))
+  let balanceCents = firstIndex === 0 ? monthFlow.openingBalanceCents : monthFlow.days[firstIndex - 1].balanceCents
+
+  for (let index = firstIndex; index < monthFlow.days.length; index += 1) {
+    const dayFlow = monthFlow.days[index]
+    let beforeTransaction = balanceCents
+
+    for (const transaction of dayFlow.transactions) {
+      if (transaction.type === 'entrada' && transaction.amountCents > 0) {
+        return { date: dayFlow.date, amountCents: beforeTransaction, hasIncome: true }
+      }
+      beforeTransaction += flowDeltaCents(transaction)
+    }
+
+    balanceCents = beforeTransaction
+  }
+
+  const lastDay = monthFlow.days[monthFlow.days.length - 1]
+  return { date: lastDay.date, amountCents: lastDay.balanceCents, hasIncome: false }
+}
+
 export function calculatePosition(state: AppState, upToDate: string, excludeId?: string): Position {
   const cutoffYear = parseYear(upToDate)
   const opening = carryIn(state, cutoffYear, excludeId)

@@ -71,6 +71,7 @@ export function findBestDepositDay(
   contributionAmount: number,
   dailyFreeBalances: Record<number, number>,
   daysInMonth: number,
+  formatMoney: (cents: number) => string = formatBRL,
 ): BestDepositDayResult {
   if (contributionAmount <= 0) {
     return {
@@ -110,7 +111,7 @@ export function findBestDepositDay(
       recommendedDay: bestSafeDay,
       projectedMinBalance: bestSafeMinAfter,
       hasNegativeRisk: false,
-      reason: `Mantém o saldo livre positivo até o fim do mês (mínimo de ${formatBRL(bestSafeMinAfter)}).`,
+      reason: `Mantém o saldo livre positivo até o fim do mês (mínimo de ${formatMoney(bestSafeMinAfter)}).`,
     }
   }
 
@@ -118,6 +119,6 @@ export function findBestDepositDay(
     recommendedDay: fallbackDay,
     projectedMinBalance: fallbackMinAfter,
     hasNegativeRisk: true,
-    reason: `Mesmo no melhor dia (${fallbackDay}), o saldo livre encosta em ${formatBRL(fallbackMinAfter)}.`,
+    reason: `Mesmo no melhor dia (${fallbackDay}), o saldo livre encosta em ${formatMoney(fallbackMinAfter)}.`,
   }
 }

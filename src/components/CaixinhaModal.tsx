@@ -4,7 +4,8 @@ import { Check, Trash2, X } from 'lucide-react'
 import { planBoxGoal } from '../lib/boxes'
 import { BOX_COLORS } from '../lib/constants'
 import { MONTH_NAMES } from '../lib/dates'
-import { centsToInput, formatBRL, parseAmountToCents } from '../lib/money'
+import { centsToInput, parseAmountToCents } from '../lib/money'
+import { usePrivacy } from '../lib/privacy'
 import { createId } from '../lib/storage'
 import type { Box } from '../types'
 
@@ -16,6 +17,7 @@ interface CaixinhaModalProps {
 }
 
 export function CaixinhaModal({ box, onClose, onSave, onDelete }: CaixinhaModalProps) {
+  const { formatBRL: formatMoney } = usePrivacy()
   const currentYear = new Date().getFullYear()
   const initialTarget = box?.targetMonth ?? box?.targetDate?.slice(0, 7) ?? `${currentYear + 1}-11`
   const [name, setName] = useState(box?.name ?? '')
@@ -228,7 +230,7 @@ export function CaixinhaModal({ box, onClose, onSave, onDelete }: CaixinhaModalP
           </div>
           <p className="text-[11px] text-slate-400">
             {suggestedCents > 0
-              ? `Sugestão pelo prazo: ${formatBRL(suggestedCents)} por mês.`
+              ? `Sugestão pelo prazo: ${formatMoney(suggestedCents)} por mês.`
               : 'Deixe o aporte em 0,00 para apenas acompanhar a sugestão.'}
           </p>
 

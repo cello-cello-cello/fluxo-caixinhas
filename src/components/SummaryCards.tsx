@@ -1,5 +1,5 @@
 import { ArrowDownLeft, ArrowUpRight, Layers3, Wallet } from 'lucide-react'
-import { formatBRL } from '../lib/money'
+import { usePrivacy } from '../lib/privacy'
 import type { AnnualFlow, Position } from '../types'
 
 interface SummaryCardsProps {
@@ -8,11 +8,12 @@ interface SummaryCardsProps {
 }
 
 export function SummaryCards({ flow, position }: SummaryCardsProps) {
+  const { formatBRL: formatMoney } = usePrivacy()
   const items = [
     {
       label: `Saldo livre em 31/dez`,
       value: flow.closingBalanceCents,
-      detail: `Aberto com ${formatBRL(flow.openingBalanceCents)}`,
+      detail: `Aberto com ${formatMoney(flow.openingBalanceCents)}`,
       icon: Wallet,
       tone: flow.closingBalanceCents < 0 ? 'text-[#C0604D]' : 'text-slate-900',
       background: 'bg-slate-50',
@@ -36,7 +37,7 @@ export function SummaryCards({ flow, position }: SummaryCardsProps) {
     {
       label: 'Patrimônio atual',
       value: position.netWorthCents,
-      detail: `${formatBRL(position.freeBalanceCents)} livres`,
+      detail: `${formatMoney(position.freeBalanceCents)} livres`,
       icon: Layers3,
       tone: position.netWorthCents < 0 ? 'text-[#C0604D]' : 'text-slate-900',
       background: 'bg-slate-50',
@@ -57,7 +58,7 @@ export function SummaryCards({ flow, position }: SummaryCardsProps) {
             </div>
             <div>
               <p className={`money mt-4 text-2xl font-extrabold tracking-tight sm:text-[26px] ${item.tone}`}>
-                {formatBRL(item.value)}
+                {formatMoney(item.value)}
               </p>
               {item.detail && <p className="money mt-1 truncate text-[11px] text-slate-400">{item.detail}</p>}
             </div>
