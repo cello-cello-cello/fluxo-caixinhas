@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import App from '../App'
-import { isoDate } from '../lib/dates'
+import { isoDate, MONTH_NAMES } from '../lib/dates'
 import { readPdfInvoiceLines } from '../lib/pdfInvoice'
 import { formatBRL } from '../lib/money'
 import { createInitialState } from '../lib/storage'
@@ -167,12 +167,14 @@ describe('aplicação', () => {
     fireEvent.click(within(februaryDialog).getByRole('button', { name: 'Salvar alterações' }))
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    expect(screen.getAllByText(/80,00/).length).toBeGreaterThan(0)
 
     const edited = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}')
-    expect(edited.transactions).toHaveLength(1)
-    expect(edited.transactions[0].amountCents).toBe(2_000)
-    expect(edited.transactions[0].date).toBe('2026-01-31')
+    expect(edited.transactions).toHaveLength(2)
+    expect(edited.transactions[0].amountCents).toBe(1_000)
+    expect(edited.transactions[0].recurrenceEnd).toBe('2026-01')
+    expect(edited.transactions[1].amountCents).toBe(2_000)
+    expect(edited.transactions[1].date).toBe('2026-02-28')
+    expect(edited.transactions[1].recurrenceDay).toBe(31)
   })
 
   it('exibe em 2027 a recorrência criada em dezembro de 2026', () => {
@@ -205,9 +207,141 @@ describe('aplicação', () => {
     fireEvent.click(within(januaryDialog).getByRole('button', { name: 'Salvar alterações' }))
 
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}')
-    expect(saved.transactions).toHaveLength(1)
-    expect(saved.transactions[0].amountCents).toBe(2_000)
+    expect(saved.transactions).toHaveLength(2)
     expect(saved.transactions[0].date).toBe('2026-12-15')
+    expect(saved.transactions[0].amountCents).toBe(1_000)
+    expect(saved.transactions[0].recurrenceEnd).toBe('2026-12')
+    expect(saved.transactions[1].date).toBe('2027-01-15')
+    expect(saved.transactions[1].amountCents).toBe(2_000)
+  })
+
+  it('permite escolher o fim da recorrência e rejeita fim anterior ao início', () => {
+    const state = createInitialState(2026)
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+
+    render(<App />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Novo' }))
+    const dialog = screen.getByRole('dialog')
+    fireEvent.change(within(dialog).getByLabelText('Data'), { target: { value: '2026-01-31' } })
+    fireEvent.change(within(dialog).getByLabelText('Valor (R$)'), { target: { value: '10,00' } })
+    fireEvent.change(within(dialog).getByLabelText('Descrição'), { target: { value: 'Aluguel' } })
+    fireEvent.click(within(dialog).getByLabelText('Repetir todo mês no dia selecionado'))
+    fireEvent.change(within(dialog).getByLabelText('Mês final da recorrência'), { target: { value: '3' } })
+    fireEvent.change(within(dialog).getByLabelText('Ano final da recorrência'), { target: { value: '2026' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Adicionar ao dia' }))
+    fireEvent.click(within(dialog).getAllByRole('button', { name: 'Fechar' })[1])
+
+    const created = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}')
+    expect(created.transactions[0].recurrenceEnd).toBe('2026-04')
+
+    fireEvent.click(screen.getByRole('button', { name: /Fevereiro:/ }))
+    fireEvent.click(screen.getByRole('button', { name: /28 de Fevereiro/ }))
+    expect(within(screen.getByRole('dialog')).getByText(/Mensal até 04\/2026/)).toBeInTheDocument()
+    fireEvent.click(within(screen.getByRole('dialog')).getAllByRole('button', { name: 'Fechar' })[0])
+
+    fireEvent.click(screen.getByRole('button', { name: 'Novo' }))
+    const invalidDialog = screen.getByRole('dialog')
+    fireEvent.change(within(invalidDialog).getByLabelText('Data'), { target: { value: '2026-12-10' } })
+    fireEvent.change(within(invalidDialog).getByLabelText('Valor (R$)'), { target: { value: '10,00' } })
+    fireEvent.change(within(invalidDialog).getByLabelText('Descrição'), { target: { value: 'Conta' } })
+    fireEvent.click(within(invalidDialog).getByLabelText('Repetir todo mês no dia selecionado'))
+    fireEvent.change(within(invalidDialog).getByLabelText('Mês final da recorrência'), { target: { value: '0' } })
+    fireEvent.change(within(invalidDialog).getByLabelText('Ano final da recorrência'), { target: { value: '2026' } })
+    fireEvent.click(within(invalidDialog).getByRole('button', { name: 'Adicionar ao dia' }))
+
+    expect(within(invalidDialog).getByRole('alert')).toHaveTextContent('não pode ser anterior')
+  })
+
+  it('oferece escopo ao editar uma ocorrência da série', () => {
+    const state = createInitialState(2026)
+    state.transactions = [{
+      id: 'aluguel',
+      date: '2026-01-31',
+      description: 'Aluguel',
+      category: 'Moradia',
+      type: 'saida',
+      amountCents: 1_000,
+      recurrenceDay: 31,
+      recurrenceEnd: '2026-03',
+    }]
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+
+    render(<App />)
+
+    fireEvent.click(screen.getByRole('button', { name: /Fevereiro:/ }))
+    fireEvent.click(screen.getByRole('button', { name: /28 de Fevereiro/ }))
+    const dialog = screen.getByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Editar Aluguel' }))
+
+    expect(within(dialog).getByRole('radio', { name: /Apenas este lançamento/ })).toBeInTheDocument()
+    expect(within(dialog).getByRole('radio', { name: /Este e os próximos até o fim/ })).toBeChecked()
+    fireEvent.click(within(dialog).getByRole('radio', { name: /Apenas este lançamento/ }))
+    fireEvent.change(within(dialog).getByLabelText('Valor (R$)'), { target: { value: '20,00' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Salvar alterações' }))
+
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}')
+    expect(saved.transactions).toHaveLength(3)
+    expect(saved.transactions[0].recurrenceEnd).toBe('2026-01')
+    expect(saved.transactions[1].date).toBe('2026-02-28')
+    expect(saved.transactions[1].amountCents).toBe(2_000)
+    expect(saved.transactions[1].recurrenceDay).toBeUndefined()
+    expect(saved.transactions[2].date).toBe('2026-03-31')
+    expect(saved.transactions[2].amountCents).toBe(1_000)
+  })
+
+  it('aplica o escopo escolhido ao excluir uma ocorrência da série', () => {
+    const state = createInitialState(2026)
+    state.transactions = [{
+      id: 'aluguel',
+      date: '2026-01-31',
+      description: 'Aluguel',
+      category: 'Moradia',
+      type: 'saida',
+      amountCents: 1_000,
+      recurrenceDay: 31,
+      recurrenceEnd: '2026-03',
+    }]
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+
+    render(<App />)
+
+    fireEvent.click(screen.getByRole('button', { name: /Fevereiro:/ }))
+    fireEvent.click(screen.getByRole('button', { name: /28 de Fevereiro/ }))
+    const dialog = screen.getByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Excluir Aluguel' }))
+    expect(within(dialog).getByRole('radio', { name: /Apenas este lançamento/ })).toBeInTheDocument()
+    fireEvent.click(within(dialog).getByRole('radio', { name: /Apenas este lançamento/ }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Confirmar exclusão de Aluguel' }))
+
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}')
+    expect(saved.transactions).toHaveLength(2)
+    expect(saved.transactions[0].recurrenceEnd).toBe('2026-01')
+    expect(saved.transactions[1].date).toBe('2026-03-31')
+    expect(saved.transactions[1].amountCents).toBe(1_000)
+  })
+
+  it('mantém aba e mês ao salvar e ao alternar entre abas', () => {
+    const month = new Date().getMonth()
+    render(<App />)
+
+    expect(screen.getByRole('heading', { name: `${MONTH_NAMES[month]} · ${new Date().getFullYear()}` })).toBeInTheDocument()
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Caixinhas' })[0])
+    fireEvent.click(screen.getAllByRole('button', { name: 'Fluxo' })[0])
+    expect(screen.getByRole('heading', { name: `${MONTH_NAMES[month]} · ${new Date().getFullYear()}` })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Novo' }))
+    const dialog = screen.getByRole('dialog')
+    fireEvent.change(within(dialog).getByLabelText('Valor (R$)'), { target: { value: '10,00' } })
+    fireEvent.change(within(dialog).getByLabelText('Descrição'), { target: { value: 'Café' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Adicionar ao dia' }))
+    expect(within(dialog).getByText('Café')).toBeInTheDocument()
+    fireEvent.click(within(dialog).getAllByRole('button', { name: 'Fechar' })[1])
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: `${MONTH_NAMES[month]} · ${new Date().getFullYear()}` })).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: 'Fluxo' })[0]).toHaveAttribute('aria-current', 'page')
   })
 
   it('filtra entradas e saídas por categoria entre mês e ano', () => {
@@ -275,20 +409,20 @@ describe('aplicação', () => {
       element?.textContent?.replace(/\u00a0/g, ' ').trim() === formatBRL(cents).replace(/\u00a0/g, ' ')
     fireEvent.change(monthSelect, { target: { value: '0' } })
 
-    expect(within(card).getByText('Posição ao final de Janeiro de 2026')).toBeInTheDocument()
+    expect(within(card).getByText('Janeiro de 2026')).toBeInTheDocument()
     expect(within(card).getAllByText(hasMoney(130_000)).length).toBeGreaterThan(0)
     expect(within(card).getByText(hasMoney(0))).toBeInTheDocument()
 
     fireEvent.change(monthSelect, { target: { value: '1' } })
 
-    expect(within(card).getByText('Posição ao final de Fevereiro de 2026')).toBeInTheDocument()
+    expect(within(card).getByText('Fevereiro de 2026')).toBeInTheDocument()
     expect(within(card).getByText(hasMoney(125_000))).toBeInTheDocument()
     expect(within(card).getByText(hasMoney(5_000))).toBeInTheDocument()
     expect(within(card).getAllByText(hasMoney(130_000)).length).toBeGreaterThan(0)
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Anual' })[0])
 
-    expect(within(card).getByText('Posição consolidada ao final de 2026')).toBeInTheDocument()
+    expect(within(card).getByText('Ano de 2026')).toBeInTheDocument()
     expect(within(card).getByText(hasMoney(123_000))).toBeInTheDocument()
     expect(within(card).getByText(hasMoney(5_000))).toBeInTheDocument()
     expect(within(card).getAllByText(hasMoney(128_000)).length).toBeGreaterThan(0)

@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { ArrowDownLeft, ArrowUpRight, Pencil, PiggyBank, Trash2, Undo2, X } from 'lucide-react'
-import { availableFor, expandTransactions, resolveBaseId } from '../lib/calc'
+import { availableFor, expandTransactions, occurrenceMonthKey, resolveBaseId } from '../lib/calc'
 import { CATEGORIES, categoryColor, CHART_COLORS, TRANSACTION_TYPES } from '../lib/constants'
-import { formatDate, isoDate, parseIsoDate, previousBusinessDayIso } from '../lib/dates'
+import { formatDate, isoDate, MONTH_NAMES, parseIsoDate, previousBusinessDayIso } from '../lib/dates'
 import { centsToInput, formatBRL, formatBRLCompact, parseAmountToCents } from '../lib/money'
 import { createId } from '../lib/storage'
-import type { AppState, Transaction, TransactionType } from '../types'
+import type { AppState, RecurrenceChange, RecurrenceScope, Transaction, TransactionType } from '../types'
 
 interface LancamentoModalProps {
   state: AppState
@@ -15,8 +15,8 @@ interface LancamentoModalProps {
   presetType?: TransactionType
   presetBoxId?: string
   onClose: () => void
-  onSave: (transaction: Transaction) => void
-  onDelete: (id: string, closeAfter?: boolean) => void
+  onSave: (transaction: Transaction, change?: RecurrenceChange) => void
+  onDelete: (id: string, closeAfter?: boolean, change?: RecurrenceChange) => void
 }
 
 const TYPE_ICONS: Record<TransactionType, typeof ArrowDownLeft> = {
@@ -57,6 +57,19 @@ const TYPE_STYLES: Record<TransactionType, { active: string; idle: string; surfa
   },
 }
 
+function defaultRecurrenceEnd(date: string): string {
+  const parsed = parseIsoDate(date)
+  return `${(parsed?.year ?? new Date().getFullYear()) + 1}-12`
+}
+
+function endMonthKey(year: number, month: number): string {
+  return `${year}-${String(month + 1).padStart(2, '0')}`
+}
+
+function recurrenceEndLabel(end: string): string {
+  return `${end.slice(5)}/${end.slice(0, 4)}`
+}
+
 export function LancamentoModal({
   state,
   initialDate,
@@ -67,21 +80,45 @@ export function LancamentoModal({
   onSave,
   onDelete,
 }: LancamentoModalProps) {
-  const [type, setType] = useState<TransactionType>(transaction?.type ?? presetType ?? 'saida')
+  const initialBaseId = transaction?.sourceId ?? transaction?.id ?? null
+  const initialBase = transaction
+    ? state.transactions.find((candidate) => candidate.id === initialBaseId) ?? transaction
+    : undefined
+  const initialEnd = initialBase?.recurrenceEnd ?? defaultRecurrenceEnd(initialBase?.date ?? initialDate)
+
+  const [type, setType] = useState<TransactionType>(initialBase?.type ?? presetType ?? 'saida')
   const [date, setDate] = useState(transaction?.date ?? initialDate)
-  const [description, setDescription] = useState(transaction?.description ?? '')
-  const [category, setCategory] = useState(transaction?.category ?? 'Outros')
-  const [amount, setAmount] = useState(transaction ? centsToInput(transaction.amountCents) : '')
-  const [boxId, setBoxId] = useState(transaction?.boxId ?? presetBoxId ?? state.boxes[0]?.id ?? '')
+  const [description, setDescription] = useState(initialBase?.description ?? '')
+  const [category, setCategory] = useState(initialBase?.category ?? 'Outros')
+  const [amount, setAmount] = useState(initialBase ? centsToInput(initialBase.amountCents) : '')
+  const [boxId, setBoxId] = useState(initialBase?.boxId ?? presetBoxId ?? state.boxes[0]?.id ?? '')
   const [error, setError] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
-  const [editingId, setEditingId] = useState<string | null>(transaction?.sourceId ?? transaction?.id ?? null)
+  const [editingId, setEditingId] = useState<string | null>(initialBaseId)
+  const [editingOccurrenceId, setEditingOccurrenceId] = useState<string | null>(
+    initialBase?.recurrenceDay ? transaction?.id ?? null : null,
+  )
+  const [editingOccurrenceMonth, setEditingOccurrenceMonth] = useState<string | null>(
+    initialBase?.recurrenceDay
+      ? occurrenceMonthKey(transaction?.id ?? initialBase.id, initialBase.date)
+      : null,
+  )
   const [editingYear, setEditingYear] = useState<number | null>(
     transaction ? parseIsoDate(transaction.date)?.year ?? null : null,
   )
-  const [repeatMonthly, setRepeatMonthly] = useState(transaction?.recurrenceDay !== undefined)
-  const [adjustToBusinessDay, setAdjustToBusinessDay] = useState(transaction?.adjustToBusinessDay === true)
+  const [repeatMonthly, setRepeatMonthly] = useState(initialBase?.recurrenceDay !== undefined)
+  const [recurrenceDay, setRecurrenceDay] = useState<number | null>(initialBase?.recurrenceDay ?? null)
+  const [endMonth, setEndMonth] = useState(() => {
+    const month = Number(initialEnd.slice(5)) - 1
+    return month >= 0 && month <= 11 ? month : 11
+  })
+  const [endYear, setEndYear] = useState(() => {
+    const year = Number(initialEnd.slice(0, 4))
+    return Number.isFinite(year) ? year : new Date().getFullYear() + 1
+  })
+  const [scope, setScope] = useState<RecurrenceScope>('series')
+  const [adjustToBusinessDay, setAdjustToBusinessDay] = useState(initialBase?.adjustToBusinessDay === true)
   const firstField = useRef<HTMLInputElement>(null)
 
   const isTransfer = type === 'guardar' || type === 'resgatar'
@@ -124,6 +161,28 @@ export function LancamentoModal({
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [onClose])
 
+  function editingChange(): RecurrenceChange | undefined {
+    if (!editingId || !editingOccurrenceId || !editingOccurrenceMonth) return undefined
+    return {
+      baseId: editingId,
+      occurrenceId: editingOccurrenceId,
+      occurrenceMonth: editingOccurrenceMonth,
+      scope,
+    }
+  }
+
+  function changeFor(item: Transaction): RecurrenceChange | undefined {
+    const baseId = resolveBaseId(expandedTransactions, item.id)
+    const base = state.transactions.find((candidate) => candidate.id === baseId)
+    if (!base?.recurrenceDay) return undefined
+    return {
+      baseId,
+      occurrenceId: item.id,
+      occurrenceMonth: occurrenceMonthKey(item.id, base.date),
+      scope,
+    }
+  }
+
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError(null)
@@ -136,6 +195,11 @@ export function LancamentoModal({
     if (parsedDate.year !== state.year && parsedDate.year !== editingYear) {
       return setError(`A data deve estar no ano de ${state.year}${editingYear === null ? '' : ` ou ${editingYear}`}.`)
     }
+    const finalEnd = endMonthKey(endYear, endMonth)
+    const startMonth = endMonthKey(parsedDate.year, parsedDate.month)
+    if (repeatMonthly && finalEnd < startMonth) {
+      return setError('O fim da repetição não pode ser anterior ao mês do lançamento.')
+    }
     if (isTransfer && !boxId) return setError('Selecione uma caixinha.')
 
     if (type === 'guardar' && amountCents > available.freeCents) {
@@ -145,26 +209,30 @@ export function LancamentoModal({
       return setError(`A caixinha tem apenas ${formatBRL(available.boxCents)} disponíveis.`)
     }
 
-    onSave({
-      id: editingId ?? createId(),
-      date,
-      description: description.trim(),
-      category: isTransfer ? 'Caixinhas' : category,
-      type,
-      amountCents,
-      boxId: isTransfer ? boxId : undefined,
-      ...(type === 'saida' && transaction?.cardId
-        ? {
-            cardId: transaction.cardId,
-            installmentGroupId: transaction.installmentGroupId,
-            installmentIndex: transaction.installmentIndex,
-            installmentCount: transaction.installmentCount,
-            invoiceMonth: transaction.invoiceMonth,
-          }
-        : {}),
-      recurrenceDay: repeatMonthly ? parsedDate.day : undefined,
-      adjustToBusinessDay,
-    })
+    onSave(
+      {
+        id: editingId ?? createId(),
+        date,
+        description: description.trim(),
+        category: isTransfer ? 'Caixinhas' : category,
+        type,
+        amountCents,
+        boxId: isTransfer ? boxId : undefined,
+        ...(type === 'saida' && initialBase?.cardId
+          ? {
+              cardId: initialBase.cardId,
+              installmentGroupId: initialBase.installmentGroupId,
+              installmentIndex: initialBase.installmentIndex,
+              installmentCount: initialBase.installmentCount,
+              invoiceMonth: initialBase.invoiceMonth,
+            }
+          : {}),
+        recurrenceDay: repeatMonthly ? recurrenceDay ?? parsedDate.day : undefined,
+        recurrenceEnd: repeatMonthly ? finalEnd : undefined,
+        adjustToBusinessDay,
+      },
+      editingChange(),
+    )
 
     if (editingId) {
       onClose()
@@ -180,15 +248,24 @@ export function LancamentoModal({
   function startEdit(item: Transaction) {
     const baseId = resolveBaseId(expandedTransactions, item.id)
     const base = state.transactions.find((candidate) => candidate.id === baseId) ?? item
-    setEditingId(baseId)
-    setEditingYear(parseIsoDate(base.date)?.year ?? null)
+    const recurring = base.recurrenceDay !== undefined
+    const finalEnd = base.recurrenceEnd ?? defaultRecurrenceEnd(base.date)
+    const endMonthValue = Number(finalEnd.slice(5)) - 1
+    setEditingId(base.id)
+    setEditingOccurrenceId(recurring ? item.id : null)
+    setEditingOccurrenceMonth(recurring ? occurrenceMonthKey(item.id, base.date) : null)
+    setEditingYear(parseIsoDate(item.date)?.year ?? parseIsoDate(base.date)?.year ?? null)
     setType(base.type)
-    setDate(base.date)
+    setDate(item.date)
     setDescription(base.description)
     setCategory(base.category)
     setAmount(centsToInput(base.amountCents))
     setBoxId(base.boxId ?? state.boxes[0]?.id ?? '')
-    setRepeatMonthly(base.recurrenceDay !== undefined)
+    setRepeatMonthly(recurring)
+    setRecurrenceDay(base.recurrenceDay ?? null)
+    setEndMonth(endMonthValue >= 0 && endMonthValue <= 11 ? endMonthValue : 11)
+    setEndYear(Number(finalEnd.slice(0, 4)) || new Date().getFullYear() + 1)
+    setScope('series')
     setAdjustToBusinessDay(base.adjustToBusinessDay === true)
     setError(null)
     setConfirmDelete(false)
@@ -198,13 +275,17 @@ export function LancamentoModal({
 
   function deleteFromList(item: Transaction) {
     if (pendingDeleteId !== item.id) {
+      if (changeFor(item)) setScope('series')
       setPendingDeleteId(item.id)
       return
     }
-    onDelete(resolveBaseId(expandedTransactions, item.id), false)
+    onDelete(resolveBaseId(expandedTransactions, item.id), false, changeFor(item))
     setPendingDeleteId(null)
     if (editingId === item.id) onClose()
   }
+
+  const pendingItem = dayTransactions.find((item) => item.id === pendingDeleteId)
+  const showScope = Boolean(editingOccurrenceMonth || (pendingItem && changeFor(pendingItem)))
 
   return (
     <div
@@ -261,6 +342,10 @@ export function LancamentoModal({
                 const style = TYPE_STYLES[item.type]
                 const box = item.boxId ? state.boxes.find((candidate) => candidate.id === item.boxId) : undefined
                 const pending = pendingDeleteId === item.id
+                const base = state.transactions.find(
+                  (candidate) => candidate.id === resolveBaseId(expandedTransactions, item.id),
+                )
+                const itemEnd = item.recurrenceEnd ?? defaultRecurrenceEnd(base?.date ?? item.date)
 
                 return (
                   <li key={item.id} className={`flex items-center gap-2 py-2.5 ${editingId === item.id ? 'rounded-xl bg-[#E9EFF5] px-2' : ''}`}>
@@ -272,6 +357,7 @@ export function LancamentoModal({
                       <p className="mt-0.5 truncate text-[11px] text-slate-400">
                         {item.category} · {TYPE_LABELS[item.type]}
                         {box ? ` · ${box.name}` : ''}
+                        {item.recurrenceDay ? ` · Mensal até ${recurrenceEndLabel(itemEnd)}` : ''}
                       </p>
                     </div>
                     <span className={`money shrink-0 text-xs font-extrabold sm:text-sm ${style.text}`}>
@@ -349,6 +435,8 @@ export function LancamentoModal({
                 max={maxDate}
                 onChange={(event) => {
                   setDate(event.target.value)
+                  const parsed = parseIsoDate(event.target.value)
+                  if (parsed) setRecurrenceDay(parsed.day)
                   setPendingDeleteId(null)
                 }}
                 required
@@ -387,11 +475,82 @@ export function LancamentoModal({
               <span>
                 <span className="block text-sm font-bold text-slate-800">Repetir todo mês no dia selecionado</span>
                 <span className="mt-0.5 block text-[11px] leading-relaxed text-slate-500">
-                  Aplica até dezembro do ano seguinte. Em meses curtos, usa o último dia válido (28/29/30).
+                  Escolha o último mês em Repetir até. Em meses curtos, usa o último dia válido (28/29/30).
                   {adjustToBusinessDay ? ' Fins de semana são antecipados para sexta.' : ''}
                 </span>
               </span>
             </label>
+
+            {repeatMonthly && (
+              <div className="grid grid-cols-2 gap-2 rounded-2xl border border-[#1E3A5F]/15 bg-white p-3.5">
+                <div>
+                  <span className="label">Repetir até</span>
+                  <select
+                    aria-label="Mês final da recorrência"
+                    className="field mt-1"
+                    value={endMonth}
+                    onChange={(event) => setEndMonth(Number(event.target.value))}
+                  >
+                    {MONTH_NAMES.map((name, index) => (
+                      <option key={name} value={index}>{name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <span className="label">Ano final</span>
+                  <select
+                    aria-label="Ano final da recorrência"
+                    className="field mt-1"
+                    value={endYear}
+                    onChange={(event) => setEndYear(Number(event.target.value))}
+                  >
+                    {(() => {
+                      const firstYear = Math.min(endYear, parseIsoDate(date)?.year ?? state.year)
+                      const count = Math.max(21, endYear - firstYear + 1)
+                      return Array.from({ length: count }, (_, index) => firstYear + index)
+                        .filter((year) => year <= 2200)
+                        .map((year) => (
+                          <option key={year} value={year}>{year}</option>
+                        ))
+                    })()}
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {showScope && (
+              <fieldset className="rounded-2xl border border-[#1E3A5F]/15 bg-white p-3.5">
+                <legend className="label px-1">Aplicar alteração ou exclusão</legend>
+                <div className="grid gap-2">
+                  <label className="flex cursor-pointer items-start gap-2.5 text-sm text-slate-700">
+                    <input
+                      type="radio"
+                      name="recurrence-scope"
+                      className="mt-1 accent-[#1E3A5F]"
+                      checked={scope === 'single'}
+                      onChange={() => setScope('single')}
+                    />
+                    <span>
+                      <span className="block font-bold">Apenas este lançamento</span>
+                      <span className="block text-[11px] text-slate-500">Os demais meses seguem a série original.</span>
+                    </span>
+                  </label>
+                  <label className="flex cursor-pointer items-start gap-2.5 text-sm text-slate-700">
+                    <input
+                      type="radio"
+                      name="recurrence-scope"
+                      className="mt-1 accent-[#1E3A5F]"
+                      checked={scope === 'series'}
+                      onChange={() => setScope('series')}
+                    />
+                    <span>
+                      <span className="block font-bold">Este e os próximos até o fim</span>
+                      <span className="block text-[11px] text-slate-500">A alteração vale deste mês em diante.</span>
+                    </span>
+                  </label>
+                </div>
+              </fieldset>
+            )}
 
             <label
               className="flex cursor-pointer items-start gap-3 rounded-2xl border border-[#1E3A5F]/15 bg-white p-3.5 transition hover:border-[#1E3A5F]/40"
@@ -511,7 +670,7 @@ export function LancamentoModal({
                     setConfirmDelete(true)
                     return
                   }
-                  onDelete(editingId, true)
+                  onDelete(editingId ?? '', true, editingChange())
                 }}
                 className={`inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border-2 px-4 py-3 text-sm font-extrabold transition sm:w-auto ${
                   confirmDelete

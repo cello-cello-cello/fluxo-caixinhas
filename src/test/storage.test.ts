@@ -99,13 +99,26 @@ describe('importação e validação', () => {
           type: 'saida',
           amountCents: 1_000,
           recurrenceDay: 31,
+          recurrenceEnd: '2026-04',
           sourceId: 'origem',
+        },
+        {
+          id: 'invalida',
+          date: '2026-05-31',
+          description: 'Inválida',
+          category: 'Outros',
+          type: 'saida',
+          amountCents: 500,
+          recurrenceDay: 31,
+          recurrenceEnd: '2026-01',
         },
       ],
     })
 
     expect(imported?.transactions[0].recurrenceDay).toBe(31)
+    expect(imported?.transactions[0].recurrenceEnd).toBe('2026-04')
     expect(imported?.transactions[0].sourceId).toBeUndefined()
+    expect(imported?.transactions[1].recurrenceEnd).toBeUndefined()
   })
 
   it('exporta todas as ocorrências recorrentes do ano', () => {

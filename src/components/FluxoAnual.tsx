@@ -63,9 +63,7 @@ export function FluxoAnual({
     <section>
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#1E3A5F]">Fluxo encadeado</p>
-          <h2 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-900">Ano de {flow.year}</h2>
-          <p className="mt-1 text-sm text-slate-500">Cada lançamento recalcula os saldos seguintes, inclusive nos anos posteriores.</p>
+          <h2 className="text-2xl font-extrabold tracking-tight text-slate-900">Ano de {flow.year}</h2>
         </div>
         <div className="inline-flex w-fit rounded-2xl bg-slate-100 p-1" role="group" aria-label="Modo de visualização">
           {(
@@ -143,8 +141,7 @@ export function FluxoAnual({
         <article className="card">
           <header className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Visão mês focado</p>
-              <h3 className="mt-1 text-xl font-extrabold text-slate-900">
+              <h3 className="text-xl font-extrabold text-slate-900">
                 {MONTH_NAMES[month.month]} <span className="text-slate-300">·</span> {flow.year}
               </h3>
             </div>
@@ -193,7 +190,7 @@ export function FluxoAnual({
                     <span className="min-w-0">
                       <span className="block truncate text-sm font-semibold text-slate-700">
                         {day.transactions.length === 0
-                          ? 'Sem lançamentos'
+                          ? '—'
                           : day.transactions.map((item) => item.description).slice(0, 2).join(', ')}
                       </span>
                       <span className="mt-1 flex flex-wrap gap-1.5">
@@ -208,14 +205,11 @@ export function FluxoAnual({
                         )}
                       </span>
                     </span>
-                    <span className="text-right">
-                      <span className={`money block text-sm font-extrabold ${balanceTone(day.balanceCents)}`}>
-                        {formatBRL(day.balanceCents)}
+                      <span className="text-right">
+                        <span className={`money block text-sm font-extrabold ${balanceTone(day.balanceCents)}`}>
+                          {formatBRL(day.balanceCents)}
+                        </span>
                       </span>
-                      <span className="mt-1 flex items-center justify-end text-[10px] font-semibold text-slate-400">
-                        saldo <ChevronRight size={12} />
-                      </span>
-                    </span>
                   </button>
                   {day.transactions.length > 0 && (
                     <div className="ml-14 mt-1 flex flex-wrap gap-1.5 pb-1">
@@ -227,6 +221,11 @@ export function FluxoAnual({
                           className="rounded-lg bg-slate-50 px-2 py-1 text-[11px] font-medium text-slate-500 transition hover:bg-[#E9EFF5] hover:text-[#1E3A5F]"
                         >
                           {transaction.description} · {formatBRLCompact(transaction.amountCents)}
+                          {transaction.recurrenceDay
+                            ? transaction.recurrenceEnd
+                              ? ` · Mensal até ${transaction.recurrenceEnd.slice(5)}/${transaction.recurrenceEnd.slice(0, 4)}`
+                              : ' · Mensal'
+                            : ''}
                         </button>
                       ))}
                     </div>

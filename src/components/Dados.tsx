@@ -57,9 +57,7 @@ export function Dados({
   return (
     <section>
       <header className="mb-4">
-        <p className="text-xs font-bold uppercase tracking-[0.16em] text-navy">Seu arquivo</p>
-        <h2 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-900">Dados</h2>
-        <p className="mt-1 text-sm text-slate-500">Tudo fica no seu dispositivo e pode ser exportado quando quiser.</p>
+        <h2 className="text-2xl font-extrabold tracking-tight text-slate-900">Dados</h2>
       </header>
 
       <div className="grid gap-3 lg:grid-cols-2">
@@ -87,9 +85,7 @@ export function Dados({
             {error && <p role="alert" className="rounded-2xl bg-navy-soft px-4 py-3 text-sm font-semibold text-navy">{error}</p>}
             <button type="submit" className="btn-primary w-full sm:w-auto">Salvar configurações</button>
           </form>
-          <p className="mt-4 text-xs leading-relaxed text-slate-400">
-            Esse saldo é o ponto de partida do 1º ano. A cada virada de dezembro para janeiro, o fechamento do ano anterior vira a abertura do ano seguinte, inclusive nas caixinhas.
-          </p>
+          <p className="mt-4 text-xs leading-relaxed text-slate-400">Defina o saldo inicial do 1º ano.</p>
         </article>
 
         <article className="card">
@@ -101,18 +97,16 @@ export function Dados({
           </div>
           <div className="space-y-2">
             <button type="button" className="btn-soft w-full justify-start hover:border-[#1E3A5F]" onClick={onExportJson}>
-              <FileJson size={16} className="text-[#1E3A5F]" /> JSON completo (caixinhas, cartões e lançamentos)
+              <FileJson size={16} className="text-[#1E3A5F]" /> JSON completo
             </button>
             <button type="button" className="btn-soft w-full justify-start hover:border-[#3A5743]" onClick={onExportTransactionsCsv}>
-              <FileSpreadsheet size={16} className="text-[#3A5743]" /> CSV de lançamentos do ano
+              <FileSpreadsheet size={16} className="text-[#3A5743]" /> CSV do ano
             </button>
             <button type="button" className="btn-soft w-full justify-start hover:border-[#1E3A5F]" onClick={onExportBoxesCsv}>
               <FileSpreadsheet size={16} className="text-[#1E3A5F]" /> CSV de caixinhas
             </button>
           </div>
-          <p className="mt-4 text-xs leading-relaxed text-slate-400">
-            O CSV usa ponto e vírgula como separador e valor com vírgula decimal, pronto para planilhas em pt-BR.
-          </p>
+          <p className="mt-4 text-xs leading-relaxed text-slate-400">CSV pronto para planilhas em pt-BR.</p>
         </article>
 
         <article className="card">
@@ -146,15 +140,13 @@ export function Dados({
           />
           <div className="space-y-2">
             <button type="button" className="btn-soft w-full justify-start hover:border-[#1E3A5F]" onClick={() => jsonInput.current?.click()}>
-              <FileJson size={16} className="text-[#1E3A5F]" /> JSON (substitui todos os dados)
+              <FileJson size={16} className="text-[#1E3A5F]" /> Importar JSON
             </button>
             <button type="button" className="btn-soft w-full justify-start hover:border-[#3A5743]" onClick={() => csvInput.current?.click()}>
-              <FileSpreadsheet size={16} className="text-[#3A5743]" /> CSV (substitui lançamentos do ano)
+              <FileSpreadsheet size={16} className="text-[#3A5743]" /> Importar CSV
             </button>
           </div>
-          <p className="mt-4 text-xs leading-relaxed text-slate-400">
-            Colunas aceitas no CSV: data;descricao;categoria;tipo;valor;caixinha_id;caixinha_nome.
-          </p>
+          <p className="mt-4 text-xs leading-relaxed text-slate-400">Use o formato do CSV exportado.</p>
         </article>
 
         <article className="card">
@@ -164,7 +156,7 @@ export function Dados({
             </span>
             <h3 className="text-[15px] font-bold text-slate-900">Recomeçar</h3>
           </div>
-          <p className="text-sm text-slate-500">Apaga caixinhas, cartões e lançamentos deste dispositivo e volta ao ano atual.</p>
+          <p className="text-sm text-slate-500">Apaga os dados deste dispositivo.</p>
           <button
             type="button"
             onClick={() => {

@@ -12,7 +12,7 @@ import { Graficos } from './components/Graficos'
 import { LancamentoModal } from './components/LancamentoModal'
 import { SenhaPdfModal } from './components/SenhaPdfModal'
 import { SummaryCards } from './components/SummaryCards'
-import { calculateAnnualFlow, getCurrentPosition } from './lib/calc'
+import { applyRecurrenceChange, calculateAnnualFlow, getCurrentPosition } from './lib/calc'
 import { isoDate, todayIso } from './lib/dates'
 import { buildInstallmentTransactions, parseInvoiceDocument } from './lib/invoices'
 import type { InstallmentFilter, InvoiceItemDraft, InvoiceParseResult } from './lib/invoices'
@@ -29,7 +29,7 @@ import {
   parseTransactionsCsv,
   saveState,
 } from './lib/storage'
-import type { AppState, Box, CreditCard, Transaction, TransactionType } from './types'
+import type { AppState, Box, CreditCard, RecurrenceChange, Transaction, TransactionType } from './types'
 
 type Tab = 'fluxo' | 'caixinhas' | 'cartoes' | 'graficos' | 'dados'
 
@@ -112,28 +112,40 @@ export default function App() {
     setDraft({ date, presetType: type, presetBoxId: boxId })
   }
 
-  function saveTransaction(transaction: Transaction) {
+  function saveTransaction(transaction: Transaction, change?: RecurrenceChange) {
     setState((previous) => ({
       ...previous,
-      transactions: previous.transactions.some((item) => item.id === transaction.id)
-        ? previous.transactions.map((item) => (item.id === transaction.id ? transaction : item))
-        : [...previous.transactions, transaction],
+      transactions: change
+        ? applyRecurrenceChange(previous.transactions, change, transaction)
+        : previous.transactions.some((item) => item.id === transaction.id)
+          ? previous.transactions.map((item) => (item.id === transaction.id ? transaction : item))
+          : [...previous.transactions, transaction],
     }))
     setToast(
-      transaction.recurrenceDay
-        ? 'Série recorrente salva. Meses seguintes recalculados.'
-        : 'Lançamento salvo. Saldos recalculados em cascata.',
+      change?.scope === 'single'
+        ? 'Ocorrência salva. Demais meses mantidos.'
+        : transaction.recurrenceDay
+          ? 'Série recorrente salva. Meses seguintes recalculados.'
+          : 'Lançamento salvo. Saldos recalculados em cascata.',
     )
   }
 
-  function deleteTransaction(id: string, closeAfter = false) {
-    const recurring = state.transactions.some((item) => item.id === id && item.recurrenceDay !== undefined)
+  function deleteTransaction(id: string, closeAfter = false, change?: RecurrenceChange) {
+    const recurring = change !== undefined || state.transactions.some((item) => item.id === id && item.recurrenceDay !== undefined)
     setState((previous) => ({
       ...previous,
-      transactions: previous.transactions.filter((item) => item.id !== id),
+      transactions: change
+        ? applyRecurrenceChange(previous.transactions, change)
+        : previous.transactions.filter((item) => item.id !== id),
     }))
     if (closeAfter) setDraft(null)
-    setToast(recurring ? 'Série recorrente excluída. Saldos recalculados.' : 'Lançamento excluído. Saldos recalculados.')
+    setToast(
+      change?.scope === 'single'
+        ? 'Ocorrência excluída. Demais meses mantidos.'
+        : recurring
+          ? 'Série recorrente excluída. Saldos recalculados.'
+          : 'Lançamento excluído. Saldos recalculados.',
+    )
   }
 
   function saveBox(box: Box) {
@@ -305,10 +317,7 @@ export default function App() {
             <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-navy shadow-lift">
               <WaveMark />
             </div>
-            <div className="min-w-0">
-              <h1 className="truncate text-lg font-extrabold leading-tight tracking-tight">Fluxo</h1>
-              <p className="hidden truncate text-[11px] font-medium text-slate-400 sm:block">Caixinhas e fluxo de caixa</p>
-            </div>
+            <h1 className="truncate text-lg font-extrabold leading-tight tracking-tight">Fluxo</h1>
           </div>
 
           <div className="flex items-center gap-1 rounded-2xl border border-slate-100 bg-slate-50/70 p-1">

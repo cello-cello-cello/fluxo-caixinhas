@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  applyRecurrenceChange,
   availableFor,
   calculateAnnualFlow,
   calculatePosition,
@@ -21,6 +22,7 @@ function transaction(partial: Partial<Transaction> & Pick<Transaction, 'date' | 
     category: partial.category ?? 'Outros',
     boxId: partial.boxId,
     recurrenceDay: partial.recurrenceDay,
+    recurrenceEnd: partial.recurrenceEnd,
     adjustToBusinessDay: partial.adjustToBusinessDay,
     sourceId: partial.sourceId,
   }
@@ -196,6 +198,97 @@ describe('fluxo de caixa encadeado', () => {
     expect(flow.months[1].days[27].expenseCents).toBe(1_000)
     expect(flow.totalExpenseCents).toBe(12_000)
     expect(flow.closingBalanceCents).toBe(88_000)
+  })
+
+  it('limita a recorrência ao mês e ao ano escolhidos', () => {
+    const state = createInitialState(2026)
+    state.initialBalanceCents = 100_000
+    state.transactions = [
+      transaction({
+        id: 'aluguel',
+        date: '2026-01-31',
+        type: 'saida',
+        amountCents: 1_000,
+        recurrenceDay: 31,
+        recurrenceEnd: '2026-04',
+      }),
+    ]
+
+    const occurrences = expandTransactions(state.transactions)
+    const flow = calculateAnnualFlow(state, 2026)
+
+    expect(occurrences.map((item) => item.date)).toEqual([
+      '2026-01-31',
+      '2026-02-28',
+      '2026-03-31',
+      '2026-04-30',
+    ])
+    expect(flow.totalExpenseCents).toBe(4_000)
+    expect(flow.closingBalanceCents).toBe(96_000)
+  })
+
+  it('edita apenas uma ocorrência e mantém o restante da série original', () => {
+    const base = transaction({
+      id: 'aluguel',
+      date: '2026-01-31',
+      type: 'saida',
+      amountCents: 1_000,
+      recurrenceDay: 31,
+      recurrenceEnd: '2026-12',
+    })
+    const result = applyRecurrenceChange(
+      [base],
+      {
+        baseId: base.id,
+        occurrenceId: 'aluguel:2026-02',
+        occurrenceMonth: '2026-02',
+        scope: 'single',
+      },
+      transaction({
+        id: 'aluguel:2026-02',
+        date: '2026-02-28',
+        type: 'saida',
+        amountCents: 2_000,
+      }),
+    )
+
+    expect(result).toHaveLength(3)
+    expect(result[0].recurrenceEnd).toBe('2026-01')
+    expect(result[1]).toMatchObject({
+      id: 'aluguel:2026-02',
+      date: '2026-02-28',
+      amountCents: 2_000,
+      recurrenceDay: undefined,
+      recurrenceEnd: undefined,
+    })
+    expect(result[2].date).toBe('2026-03-31')
+    expect(result[2].amountCents).toBe(1_000)
+    expect(result[2].recurrenceEnd).toBe('2026-12')
+
+    const state = createInitialState(2026)
+    state.initialBalanceCents = 100_000
+    state.transactions = result
+    expect(calculateAnnualFlow(state, 2026).closingBalanceCents).toBe(87_000)
+  })
+
+  it('remove somente as ocorrências a partir do mês escolhido', () => {
+    const base = transaction({
+      id: 'aluguel',
+      date: '2026-01-31',
+      type: 'saida',
+      amountCents: 1_000,
+      recurrenceDay: 31,
+      recurrenceEnd: '2026-12',
+    })
+    const result = applyRecurrenceChange([base], {
+      baseId: base.id,
+      occurrenceId: 'aluguel:2026-02',
+      occurrenceMonth: '2026-02',
+      scope: 'series',
+    })
+
+    expect(result).toHaveLength(1)
+    expect(result[0].recurrenceEnd).toBe('2026-01')
   })
 
   it('resolve a ocorrência até o lançamento base da série', () => {

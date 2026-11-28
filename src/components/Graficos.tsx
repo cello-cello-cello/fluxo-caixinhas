@@ -56,7 +56,7 @@ export function Graficos({ state, flow }: GraficosProps) {
     .map(([label, value]) => ({ label, value, color: categoryColor(label) }))
     .sort((a, b) => b.value - a.value)
 
-  const periodLabel = period === 'anual' ? `ano de ${state.year}` : `${MONTH_NAMES[month]} de ${state.year}`
+  const periodLabel = period === 'anual' ? `Ano de ${state.year}` : `${MONTH_NAMES[month]} de ${state.year}`
   const periodControl = (
     <div className="flex flex-wrap items-center gap-2">
       <div className="inline-flex rounded-2xl bg-slate-100 p-1" role="group" aria-label="Período do gráfico">
@@ -92,10 +92,6 @@ export function Graficos({ state, flow }: GraficosProps) {
   const wealthMonth = period === 'anual' ? 11 : month
   const wealthDate = isoDate(state.year, wealthMonth, daysInMonth(state.year, wealthMonth))
   const wealthPosition = useMemo(() => calculatePosition(state, wealthDate), [state, wealthDate])
-  const wealthSubtitle =
-    period === 'anual'
-      ? `Posição consolidada ao final de ${state.year}`
-      : `Posição ao final de ${MONTH_NAMES[month]} de ${state.year}`
   const wealthSegments = [
     { label: 'Saldo livre', value: wealthPosition.freeBalanceCents, color: CHART_COLORS.navy },
     { label: 'Caixinhas', value: wealthPosition.totalBoxCents, color: CHART_COLORS.moss },
@@ -109,30 +105,27 @@ export function Graficos({ state, flow }: GraficosProps) {
   return (
     <section>
       <header className="mb-4">
-        <p className="text-xs font-bold uppercase tracking-[0.16em] text-navy">Leitura visual</p>
-        <h2 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-900">Gráficos</h2>
-        <p className="mt-1 text-sm text-slate-500">Posição atual e composição de entradas e saídas de {state.year}.</p>
+        <h2 className="text-2xl font-extrabold tracking-tight text-slate-900">Gráficos</h2>
       </header>
 
       <div className="grid gap-3 lg:grid-cols-2">
         <Donut
           segments={wealthSegments}
           title="Livre × caixinhas"
-          subtitle={wealthSubtitle}
+          subtitle={periodLabel}
           control={periodControl}
           fullTotal
         />
         <Donut
           segments={categorySegments}
           title="Entradas e saídas por categoria"
-          subtitle={`Rendimentos e gastos de ${periodLabel}; reservas ficam de fora`}
+          subtitle={periodLabel}
           control={periodControl}
         />
       </div>
 
       <article className="card mt-3">
         <h3 className="text-[15px] font-bold text-slate-900">Entradas e saídas por mês</h3>
-        <p className="mt-1 text-xs text-slate-400">As barras usam o mesmo intervalo para comparação.</p>
         <div className="mt-3 flex items-center gap-4 text-[11px] font-semibold text-slate-400">
           <span className="flex items-center gap-1.5"><i className="h-2 w-2 rounded-full bg-[#4A6B53]" /> entradas</span>
           <span className="flex items-center gap-1.5"><i className="h-2 w-2 rounded-full bg-[#C0604D]" /> saídas</span>

@@ -25,9 +25,7 @@ export function Caixinhas({ state, position, monthFlow, onAdd, onEdit, onDelete,
     <section>
       <header className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.16em] text-navy">Reservas separadas</p>
-          <h2 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-900">Caixinhas</h2>
-          <p className="mt-1 text-sm text-slate-500">Guardar e resgatar nunca viram gasto de consumo.</p>
+          <h2 className="text-2xl font-extrabold tracking-tight text-slate-900">Caixinhas</h2>
         </div>
         <button type="button" className="btn-primary w-fit" onClick={onAdd}>
           <PiggyBank size={17} /> Nova caixinha
@@ -55,9 +53,7 @@ export function Caixinhas({ state, position, monthFlow, onAdd, onEdit, onDelete,
             <Sparkles size={26} />
           </div>
           <h3 className="mt-4 text-lg font-extrabold text-slate-900">Sua primeira caixinha</h3>
-          <p className="mt-1 max-w-sm text-sm text-slate-500">
-            Crie reservas com metas, prazo e rendimento estimado sem confundir com o gasto do dia a dia.
-          </p>
+          <p className="mt-1 max-w-sm text-sm text-slate-500">Crie reservas e acompanhe suas metas.</p>
           <button type="button" className="btn-primary mt-5" onClick={onAdd}>
             Criar caixinha
           </button>

@@ -1,5 +1,14 @@
 export type TransactionType = 'entrada' | 'saida' | 'guardar' | 'resgatar'
 
+export type RecurrenceScope = 'single' | 'series'
+
+export interface RecurrenceChange {
+  baseId: string
+  occurrenceId: string
+  occurrenceMonth: string
+  scope: RecurrenceScope
+}
+
 export interface Transaction {
   id: string
   date: string
@@ -14,6 +23,7 @@ export interface Transaction {
   installmentCount?: number
   invoiceMonth?: string
   recurrenceDay?: number
+  recurrenceEnd?: string
   adjustToBusinessDay?: boolean
   sourceId?: string
 }

@@ -20,7 +20,7 @@ export function SummaryCards({ flow, position }: SummaryCardsProps) {
     {
       label: 'Entradas no ano',
       value: flow.totalIncomeCents,
-      detail: 'Somas de todas as entradas',
+      detail: '',
       icon: ArrowDownLeft,
       tone: 'text-moss-dark',
       background: 'bg-moss-soft',
@@ -28,7 +28,7 @@ export function SummaryCards({ flow, position }: SummaryCardsProps) {
     {
       label: 'Saídas no ano',
       value: flow.totalExpenseCents,
-      detail: 'Gasto de consumo',
+      detail: '',
       icon: ArrowUpRight,
       tone: 'text-navy',
       background: 'bg-navy-soft',
@@ -56,7 +56,7 @@ export function SummaryCards({ flow, position }: SummaryCardsProps) {
             <p className={`money mt-1.5 text-xl font-extrabold tracking-tight sm:text-2xl ${item.tone}`}>
               {formatBRL(item.value)}
             </p>
-            <p className="money mt-2 truncate text-[11px] text-slate-400">{item.detail}</p>
+            {item.detail && <p className="money mt-2 truncate text-[11px] text-slate-400">{item.detail}</p>}
           </article>
         )
       })}

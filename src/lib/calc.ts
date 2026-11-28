@@ -6,7 +6,16 @@ import {
   previousBusinessDayIso,
   todayIso,
 } from './dates'
-import type { AnnualFlow, AppState, Box, DayFlow, MonthFlow, Position, Transaction } from '../types'
+import type {
+  AnnualFlow,
+  AppState,
+  Box,
+  DayFlow,
+  MonthFlow,
+  Position,
+  RecurrenceChange,
+  Transaction,
+} from '../types'
 
 function sortTransactions(transactions: Transaction[]): Transaction[] {
   return [...transactions].sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id))
@@ -24,6 +33,51 @@ function recurrenceDate(year: number, month: number, day: number, adjustToBusine
   return previousBusinessDayIso(isoDate(year, month, targetDay))
 }
 
+function parseMonthKey(value: string | undefined): { year: number; month: number } | null {
+  if (!value || !/^\d{4}-\d{2}$/.test(value)) return null
+  const [year, month] = value.split('-').map(Number)
+  if (month < 1 || month > 12) return null
+  return { year, month }
+}
+
+function monthKey(year: number, month: number): string {
+  return `${year}-${String(month).padStart(2, '0')}`
+}
+
+function monthIndex(key: string): number | null {
+  const parsed = parseMonthKey(key)
+  if (!parsed) return null
+  return parsed.year * 12 + parsed.month - 1
+}
+
+function addMonths(key: string, delta: number): string | null {
+  const index = monthIndex(key)
+  if (index === null) return null
+  const next = index + delta
+  return monthKey(Math.floor(next / 12), ((next % 12) + 12) % 12 + 1)
+}
+
+function recurrenceEndKey(transaction: Transaction, parsed: { year: number; month: number }): string {
+  const explicit = parseMonthKey(transaction.recurrenceEnd)
+  return explicit ? monthKey(explicit.year, explicit.month) : monthKey(parsed.year + 1, 12)
+}
+
+export function occurrenceMonthKey(id: string, fallbackDate: string): string {
+  const match = id.match(/:(\d{4}-\d{2})$/)
+  return match?.[1] ?? fallbackDate.slice(0, 7)
+}
+
+function firstDateForMonth(key: string, day: number): string {
+  const parsed = parseMonthKey(key)
+  if (!parsed) return ''
+  return isoDate(parsed.year, parsed.month - 1, Math.min(day, daysInMonth(parsed.year, parsed.month - 1)))
+}
+
+function makeId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID()
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
 export function expandTransactions(transactions: Transaction[]): Transaction[] {
   return transactions.flatMap((transaction) => {
     if (!transaction.recurrenceDay) {
@@ -35,14 +89,15 @@ export function expandTransactions(transactions: Transaction[]): Transaction[] {
     const day = Math.max(1, Math.min(31, transaction.recurrenceDay))
     const occurrences: Transaction[] = []
     const startIndex = parsed.year * 12 + parsed.month
-    const endIndex = (parsed.year + 1) * 12 + 11
+    const explicitEndIndex = monthIndex(recurrenceEndKey(transaction, parsed))
+    const endIndex = explicitEndIndex === null ? startIndex : Math.max(startIndex, explicitEndIndex)
 
     for (let index = startIndex; index <= endIndex; index += 1) {
       const year = Math.floor(index / 12)
       const month = index % 12
       occurrences.push({
         ...transaction,
-        id: index === startIndex ? transaction.id : `${transaction.id}:${year}-${month + 1}`,
+        id: index === startIndex ? transaction.id : `${transaction.id}:${monthKey(year, month + 1)}`,
         date: recurrenceDate(year, month, day, transaction.adjustToBusinessDay),
         sourceId: transaction.id,
       })
@@ -54,6 +109,68 @@ export function expandTransactions(transactions: Transaction[]): Transaction[] {
 
 export function resolveBaseId(transactions: Transaction[], id: string): string {
   return transactions.find((transaction) => transaction.id === id)?.sourceId ?? id
+}
+
+export function applyRecurrenceChange(
+  transactions: Transaction[],
+  change: RecurrenceChange,
+  edited?: Transaction,
+): Transaction[] {
+  const base = transactions.find((transaction) => transaction.id === change.baseId)
+  const unchanged = () => {
+    if (!edited) return transactions.filter((transaction) => transaction.id !== change.baseId)
+    return transactions.some((transaction) => transaction.id === edited.id)
+      ? transactions.map((transaction) => (transaction.id === edited.id ? edited : transaction))
+      : [...transactions, edited]
+  }
+  const parsed = base ? parseIsoDate(base.date) : null
+  const occurrenceIndex = monthIndex(change.occurrenceMonth)
+  if (!base || !base.recurrenceDay || !parsed || occurrenceIndex === null) return unchanged()
+
+  const startIndex = parsed.year * 12 + parsed.month
+  const endIndex = Math.max(startIndex, monthIndex(recurrenceEndKey(base, parsed)) ?? startIndex)
+  if (occurrenceIndex < startIndex || occurrenceIndex > endIndex) return unchanged()
+
+  const previousMonth = addMonths(change.occurrenceMonth, -1)
+  const nextMonth = addMonths(change.occurrenceMonth, 1)
+  const previousIndex = previousMonth ? monthIndex(previousMonth) : null
+  const nextIndex = nextMonth ? monthIndex(nextMonth) : null
+  const others = transactions.filter((transaction) => transaction.id !== base.id)
+  const result: Transaction[] = []
+
+  if (previousIndex !== null && previousIndex >= startIndex && previousMonth) {
+    result.push({ ...base, recurrenceEnd: previousMonth })
+  }
+
+  if (change.scope === 'series' && edited) {
+    result.push({
+      ...edited,
+      id: change.occurrenceId === base.id ? base.id : makeId(),
+      sourceId: undefined,
+    })
+  }
+
+  if (change.scope === 'single' && edited) {
+    result.push({
+      ...edited,
+      id: change.occurrenceId,
+      recurrenceDay: undefined,
+      recurrenceEnd: undefined,
+      sourceId: undefined,
+    })
+  }
+
+  if (change.scope === 'single' && nextIndex !== null && nextIndex <= endIndex && nextMonth) {
+    const day = Math.max(1, Math.min(31, base.recurrenceDay))
+    result.push({
+      ...base,
+      id: makeId(),
+      date: firstDateForMonth(nextMonth, day),
+      recurrenceEnd: recurrenceEndKey(base, parsed),
+    })
+  }
+
+  return [...result, ...others]
 }
 
 function matchesId(transaction: Transaction, id?: string): boolean {

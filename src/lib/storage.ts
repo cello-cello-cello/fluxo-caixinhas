@@ -90,6 +90,14 @@ function sanitizeTransaction(value: unknown, boxIds: Set<string>, cardIds: Set<s
     : undefined
   const recurrenceValue = toInteger(value.recurrenceDay)
   const recurrenceDay = recurrenceValue > 0 ? Math.min(31, recurrenceValue) : undefined
+  const recurrenceEndMonth = typeof value.recurrenceEnd === 'string' && /^\d{4}-\d{2}$/.test(value.recurrenceEnd)
+    ? Number(value.recurrenceEnd.slice(5))
+    : 0
+  const rawRecurrenceEnd = recurrenceEndMonth >= 1 && recurrenceEndMonth <= 12
+    && typeof value.recurrenceEnd === 'string' && value.recurrenceEnd >= value.date.slice(0, 7)
+    ? value.recurrenceEnd
+    : undefined
+  const recurrenceEnd = recurrenceDay ? rawRecurrenceEnd : undefined
   const adjustToBusinessDay = value.adjustToBusinessDay === true ? true : undefined
 
   if ((type === 'guardar' || type === 'resgatar') && !boxId) return null
@@ -108,6 +116,7 @@ function sanitizeTransaction(value: unknown, boxIds: Set<string>, cardIds: Set<s
     installmentCount: installmentCountValue > 0 ? installmentCountValue : undefined,
     invoiceMonth,
     recurrenceDay,
+    recurrenceEnd,
     adjustToBusinessDay,
   }
 }

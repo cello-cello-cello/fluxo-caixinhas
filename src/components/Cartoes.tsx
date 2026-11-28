@@ -46,9 +46,7 @@ export function Cartoes({ state, onAdd, onEdit, onDelete, onImportPdf, onManual 
     <section>
       <header className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.16em] text-navy">Limite e faturas</p>
-          <h2 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-900">Cartões</h2>
-          <p className="mt-1 text-sm text-slate-500">Importe a fatura, projete as parcelas e acompanhe o limite livre.</p>
+          <h2 className="text-2xl font-extrabold tracking-tight text-slate-900">Cartões</h2>
         </div>
         <button type="button" className="btn-primary w-fit" onClick={onAdd}>
           <Plus size={17} /> Novo cartão
@@ -76,9 +74,7 @@ export function Cartoes({ state, onAdd, onEdit, onDelete, onImportPdf, onManual 
             <CreditCardIcon size={26} />
           </div>
           <h3 className="mt-4 text-lg font-extrabold text-slate-900">Seu primeiro cartão</h3>
-          <p className="mt-1 max-w-sm text-sm text-slate-500">
-            Cadastre limite, fechamento e vencimento para projetar as parcelas da fatura no fluxo de caixa.
-          </p>
+          <p className="mt-1 max-w-sm text-sm text-slate-500">Cadastre seus cartões para acompanhar limite e faturas.</p>
           <button type="button" className="btn-primary mt-5" onClick={onAdd}>
             Criar cartão
           </button>
