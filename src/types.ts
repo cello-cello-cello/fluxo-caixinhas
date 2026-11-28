@@ -39,12 +39,15 @@ export interface CreditCard {
   dueDate?: string
 }
 
+export type InvoiceItemKind = 'vista' | 'parcela' | 'credito' | 'encargo'
+
 export interface CardInvoiceItem {
   id: string
   description: string
   amountCents: number
   currentInstallment: number
   installmentCount: number
+  kind?: InvoiceItemKind
   purchaseDate?: string
   dueDate?: string
   source?: string
@@ -57,6 +60,7 @@ export interface CardInvoice {
   items: CardInvoiceItem[]
   rawText: string
   sections: string[]
+  totalCents?: number
   fromMonth?: string
 }
 

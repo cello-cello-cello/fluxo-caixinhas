@@ -1,10 +1,12 @@
 import { carryIn, expandTransactions } from './calc'
 import { BOX_COLORS } from './constants'
 import { isoDate, isValidIsoDate, todayIso } from './dates'
-import type { AppState, Box, CardInvoice, CardInvoiceItem, CreditCard, Transaction, TransactionType } from '../types'
+import { classifyInvoiceItem } from './invoices'
+import type { AppState, Box, CardInvoice, CardInvoiceItem, CreditCard, InvoiceItemKind, Transaction, TransactionType } from '../types'
 
 const STORAGE_KEY = 'fluxo-caixinhas:v1'
 const VALID_TYPES: TransactionType[] = ['entrada', 'saida', 'guardar', 'resgatar']
+const VALID_INVOICE_KINDS: InvoiceItemKind[] = ['vista', 'parcela', 'credito', 'encargo']
 
 export function createId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID()
@@ -225,6 +227,8 @@ function sanitizeCardInvoiceItem(value: unknown): CardInvoiceItem | null {
   const count = Math.min(36, Math.max(1, toInteger(value.installmentCount, 1)))
   const current = Math.min(count, Math.max(1, toInteger(value.currentInstallment, 1)))
   const source = typeof value.source === 'string' && value.source.trim() ? value.source.trim().slice(0, 120) : undefined
+  const kind = VALID_INVOICE_KINDS.find((item) => item === value.kind)
+    ?? classifyInvoiceItem({ description, amountCents, currentInstallment: current, installmentCount: count })
 
   return {
     id: typeof value.id === 'string' && value.id ? value.id : createId(),
@@ -232,6 +236,7 @@ function sanitizeCardInvoiceItem(value: unknown): CardInvoiceItem | null {
     amountCents,
     currentInstallment: current,
     installmentCount: count,
+    kind,
     purchaseDate: optionalDate(value.purchaseDate),
     dueDate: optionalDate(value.dueDate),
     source,
@@ -243,6 +248,7 @@ function sanitizeCardInvoice(value: unknown, cardIds: Set<string>): CardInvoice 
   if (typeof value.cardId !== 'string' || !cardIds.has(value.cardId)) return null
   const invoiceMonth = optionalMonth(value.invoiceMonth)
   if (!invoiceMonth) return null
+  const totalCents = toInteger(value.totalCents)
 
   return {
     id: typeof value.id === 'string' && value.id ? value.id : `${value.cardId}:${invoiceMonth}`,
@@ -255,6 +261,7 @@ function sanitizeCardInvoice(value: unknown, cardIds: Set<string>): CardInvoice 
     sections: Array.isArray(value.sections)
       ? value.sections.filter((section): section is string => typeof section === 'string').map((section) => section.slice(0, 80))
       : [],
+    totalCents: totalCents > 0 ? totalCents : undefined,
     fromMonth: optionalMonth(value.fromMonth),
   }
 }
@@ -282,12 +289,17 @@ function migrateCardInvoices(transactions: Transaction[], cardIds: Set<string>):
     const itemId = transaction.installmentGroupId.slice(transaction.cardId.length + 1)
     let item = invoice.items.find((candidate) => candidate.id === itemId)
     if (!item) {
+      const amountCents = transaction.type === 'entrada' ? -transaction.amountCents : transaction.amountCents
+      const description = transaction.description.replace(/ \(\d+\/\d+\)$/, '')
+      const currentInstallment = transaction.installmentIndex ?? 1
+      const installmentCount = transaction.installmentCount ?? 1
       item = {
         id: itemId || transaction.installmentGroupId,
-        description: transaction.description.replace(/ \(\d+\/\d+\)$/, ''),
-        amountCents: transaction.type === 'entrada' ? -transaction.amountCents : transaction.amountCents,
-        currentInstallment: transaction.installmentIndex ?? 1,
-        installmentCount: transaction.installmentCount ?? 1,
+        description,
+        amountCents,
+        currentInstallment,
+        installmentCount,
+        kind: classifyInvoiceItem({ description, amountCents, currentInstallment, installmentCount }),
         dueDate: transaction.date,
       }
       invoice.items.push(item)

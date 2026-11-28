@@ -184,10 +184,12 @@ describe('importação e validação', () => {
         amountCents: 10_000,
         currentInstallment: 1,
         installmentCount: 3,
+        kind: 'parcela',
         dueDate: '2027-01-01',
       }],
       rawText: '',
       sections: [],
+      totalCents: 10_000,
       fromMonth: '2027-01',
     }]
 

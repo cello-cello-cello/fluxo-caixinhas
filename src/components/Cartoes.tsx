@@ -144,7 +144,10 @@ export function Cartoes({ state, onAdd, onEdit, onDelete, onImportPdf, onManual 
                     <CalendarDays size={14} className="text-slate-400" />
                     Fecha {card.closingDate ? formatDate(card.closingDate) : `dia ${card.closingDay}`} · vence {formatDate(nextDue)}
                   </p>
-                  <p>{commitment.openInstallments} parcela(s) em aberto desde este mês.</p>
+                  <p>
+                    {commitment.openInstallments} parcela(s) em aberto desde este mês
+                    {' · '}{commitment.futureInstallments} futura(s) após a atual.
+                  </p>
                   <p>Fatura atual + parcelas futuras em aberto.</p>
                 </div>
 

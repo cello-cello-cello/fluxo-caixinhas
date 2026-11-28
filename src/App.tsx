@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { BarChart3, CalendarRange, ChevronLeft, ChevronRight, CreditCard as CreditCardIcon, Database, PiggyBank } from 'lucide-react'
 import { Caixinhas } from './components/Caixinhas'
 import { CaixinhaModal } from './components/CaixinhaModal'
@@ -6,11 +6,13 @@ import { CartaoModal } from './components/CartaoModal'
 import { Cartoes } from './components/Cartoes'
 import { Dados } from './components/Dados'
 import { FaturaImportModal } from './components/FaturaImportModal'
+import { FluxoLogo } from './components/FluxoLogo'
 import { FluxoAnual } from './components/FluxoAnual'
 import type { ViewMode } from './components/FluxoAnual'
 import { Graficos } from './components/Graficos'
 import { LancamentoModal } from './components/LancamentoModal'
 import { SenhaPdfModal } from './components/SenhaPdfModal'
+import { SplashScreen } from './components/SplashScreen'
 import { SummaryCards } from './components/SummaryCards'
 import { boxTargetMonth } from './lib/boxes'
 import { applyRecurrenceChange, calculateAnnualFlow, getCurrentPosition } from './lib/calc'
@@ -48,6 +50,7 @@ interface InvoiceDraft {
   items: InvoiceItemDraft[]
   rawText: string
   sections: string[]
+  totalCents?: number
 }
 
 interface PasswordDraft {
@@ -134,6 +137,8 @@ export default function App() {
   const [invoiceDraft, setInvoiceDraft] = useState<InvoiceDraft | null>(null)
   const [passwordDraft, setPasswordDraft] = useState<PasswordDraft | null>(null)
   const [toast, setToast] = useState<string | null>(null)
+  const [showSplash, setShowSplash] = useState(true)
+  const finishSplash = useCallback(() => setShowSplash(false), [])
 
   useEffect(() => {
     if (demoBackup) return
@@ -284,6 +289,7 @@ export default function App() {
       items: parsed.items,
       rawText: parsed.rawText,
       sections: parsed.sections,
+      totalCents: parsed.totalCents,
     })
     setToast(
       parsed.items.length > 0
@@ -334,7 +340,7 @@ export default function App() {
     })
   }
 
-  function saveInvoice(items: InvoiceItemDraft[], filter: InstallmentFilter) {
+  function saveInvoice(items: InvoiceItemDraft[], filter: InstallmentFilter, totalCents?: number) {
     if (!invoiceDraft) return
     const { card, invoiceMonth } = invoiceDraft
     const invoice: CardInvoice = {
@@ -344,6 +350,7 @@ export default function App() {
       items,
       rawText: invoiceDraft.rawText,
       sections: invoiceDraft.sections,
+      totalCents,
       fromMonth: filter.fromMonth,
     }
 
@@ -424,9 +431,7 @@ export default function App() {
       <header className="sticky top-0 z-20 border-b border-[#E6EAF0] bg-white/90 backdrop-blur-xl">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3.5 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-navy shadow-lift">
-              <WaveMark />
-            </div>
+            <FluxoLogo size={44} className="shrink-0 shadow-lift" />
             <h1 className="truncate text-lg font-extrabold leading-tight tracking-tight">Fluxo</h1>
           </div>
 
@@ -607,6 +612,7 @@ export default function App() {
           invoiceMonth={invoiceDraft.invoiceMonth}
           items={invoiceDraft.items}
           rawText={invoiceDraft.rawText}
+          invoiceTotalCents={invoiceDraft.totalCents}
           onClose={() => setInvoiceDraft(null)}
           onSave={saveInvoice}
         />
@@ -631,27 +637,8 @@ export default function App() {
           {toast}
         </div>
       )}
-    </div>
-  )
-}
 
-function WaveMark() {
-  return (
-    <svg viewBox="0 0 32 32" className="h-6 w-6" aria-hidden="true">
-      <path
-        d="M3 11c3.5-4 7-4 10.5 0s7 4 10.5 0c1.4-1.6 2.9-2.7 5-3"
-        fill="none"
-        stroke="#FFFFFF"
-        strokeWidth="2.2"
-        strokeLinecap="round"
-      />
-      <path
-        d="M3 20c3.5-4 7-4 10.5 0s7 4 10.5 0c1.4-1.6 2.9-2.7 5-3"
-        fill="none"
-        stroke="#4A6B53"
-        strokeWidth="2.2"
-        strokeLinecap="round"
-      />
-    </svg>
+      {showSplash && <SplashScreen onFinish={finishSplash} />}
+    </div>
   )
 }

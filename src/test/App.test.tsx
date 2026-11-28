@@ -750,6 +750,48 @@ describe('aplicação', () => {
     expect(readPdfMock).toHaveBeenCalledTimes(1)
   })
 
+  it('mostra a conferência com o total do PDF e salva a classificação editada', async () => {
+    const year = new Date().getFullYear()
+    const state = createInitialState(year)
+    state.cards = [{ id: 'c1', name: 'Nubank', limitCents: 100_000, closingDay: 10, dueDay: 15 }]
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+    readPdfMock.mockResolvedValue([
+      'Cartão final 8018',
+      'CAFÉ @ DA ESQUINA',
+      '15/10',
+      'parc. 02/06',
+      '30.50 ))',
+      'VALOR TOTAL R$ 30,50',
+    ])
+
+    render(<App />)
+    fireEvent.click(screen.getAllByRole('button', { name: 'Cartões' })[0])
+    fireEvent.change(screen.getByLabelText('Importar fatura PDF de Nubank'), {
+      target: { files: [new File(['pdf'], 'fatura.pdf', { type: 'application/pdf' })] },
+    })
+
+    const dialog = await screen.findByRole('dialog')
+    await waitFor(() => expect(within(dialog).getByDisplayValue('CAFÉ DA ESQUINA')).toBeInTheDocument())
+    expect(within(dialog).getByLabelText('Total da fatura (R$)')).toHaveValue('30,50')
+    expect(within(dialog).getByText(/Conferência OK/)).toBeInTheDocument()
+    expect(within(dialog).getByLabelText('Classificação')).toHaveValue('parcela')
+
+    fireEvent.change(within(dialog).getByLabelText('Classificação'), { target: { value: 'encargo' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Salvar fatura e parcelas' }))
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as {
+      transactions: unknown[]
+      cardInvoices: Array<{
+        totalCents?: number
+        items: Array<{ kind?: string; source?: string }>
+      }>
+    }
+    expect(saved.transactions).toHaveLength(0)
+    expect(saved.cardInvoices[0].totalCents).toBe(3_050)
+    expect(saved.cardInvoices[0].items[0]).toMatchObject({ kind: 'encargo', source: 'Final 8018' })
+  })
+
   it('aplica o filtro de mês inicial e permite conferir linhas e texto bruto', async () => {
     const now = new Date()
     const year = now.getFullYear()

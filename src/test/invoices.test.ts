@@ -93,8 +93,60 @@ describe('importação da fatura', () => {
       amountCents: -5_000,
       currentInstallment: 1,
       installmentCount: 1,
+      kind: 'credito',
       source: 'Final 4761 · Compras',
     })
+  })
+
+  it('reconstrói linhas quebradas, remove ruído e preserva letras acentuadas', () => {
+    const parsed = parseInvoiceDocument([
+      'Cartão final 8018',
+      'CAFÉ @ DA ESQUINA',
+      '15/10',
+      'parc. 02/06',
+      '30.50 ))',
+      'Resumo da Fatura VALOR TOTAL R$ 96.67',
+      'CET R$ 12,00',
+      'SAC 0800 123 4567',
+    ], '2026-11')
+
+    expect(parsed.totalCents).toBe(9_667)
+    expect(parsed.items).toHaveLength(1)
+    expect(parsed.items[0]).toMatchObject({
+      description: 'CAFÉ DA ESQUINA',
+      amountCents: 3_050,
+      currentInstallment: 2,
+      installmentCount: 6,
+      kind: 'parcela',
+      purchaseDate: '2026-10-15',
+      source: 'Final 8018',
+    })
+    expect(parsed.rawText).toContain('CAFÉ DA ESQUINA 15/10 parc. 02/06 30,50')
+  })
+
+  it('classifica itens, detecta o total e associa o final de cada bloco', () => {
+    const parsed = parseInvoiceDocument([
+      'Fatura final 4761',
+      '15/10 MERCADO 96.67',
+      '15/10 PAGAMENTO -531,71',
+      'Cartão final 3785',
+      'Juros',
+      '15/10 JUROS 12,34',
+      'Fatura final 8018',
+      '15/10 LOJA 30,50',
+      'VALOR TOTAL R$ 1.234,56',
+    ], '2026-11')
+
+    expect(parsed.totalCents).toBe(123_456)
+    expect(parsed.items.map((item) => item.kind)).toEqual(['vista', 'credito', 'encargo', 'vista'])
+    expect(parsed.items.map((item) => item.source)).toEqual([
+      'Final 4761',
+      'Final 4761',
+      'Final 3785',
+      'Final 8018',
+    ])
+    expect(parsed.items[1].amountCents).toBe(-53_171)
+    expect(parsed.items[2].description).toBe('JUROS')
   })
 
   it('descarta parcelas anteriores ao mês inicial escolhido', () => {
@@ -206,6 +258,7 @@ describe('projeção de parcelas', () => {
       committedCents: 50_000,
       availableCents: 0,
       openInstallments: 5,
+      futureInstallments: 4,
       exceeded: true,
     })
   })
@@ -222,6 +275,23 @@ describe('projeção de parcelas', () => {
       committedCents: 30_000,
       availableCents: 0,
       openInstallments: 6,
+      futureInstallments: 4,
+      exceeded: false,
+    })
+  })
+
+  it('mantém o disponível no teto do limite quando os créditos superam a fatura', () => {
+    const state = createInitialState(2026)
+    state.cards = [{ ...card, limitCents: 50_000 }]
+    state.cardInvoices = [invoiceFor([
+      { id: 'credito', description: 'Pagamento', amountCents: -20_000, currentInstallment: 1, installmentCount: 1 },
+    ])]
+
+    expect(cardCommitment(state, 'c1', new Date(2026, 10, 27))).toEqual({
+      committedCents: -20_000,
+      availableCents: 50_000,
+      openInstallments: 1,
+      futureInstallments: 0,
       exceeded: false,
     })
   })

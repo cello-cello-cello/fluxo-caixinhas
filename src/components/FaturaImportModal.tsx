@@ -1,20 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { ChevronDown, Plus, Trash2, X } from 'lucide-react'
-import { countPlannedTransactions, installmentDueDate } from '../lib/invoices'
+import { classifyInvoiceItem, countPlannedTransactions, installmentDueDate } from '../lib/invoices'
 import type { InstallmentFilter, InvoiceItemDraft } from '../lib/invoices'
 import { formatDate, isValidIsoDate } from '../lib/dates'
-import { centsToInput, parseAmountToCents } from '../lib/money'
+import { centsToInput, formatBRL, parseAmountToCents } from '../lib/money'
 import { createId } from '../lib/storage'
-import type { CreditCard } from '../types'
+import type { CreditCard, InvoiceItemKind } from '../types'
 
 interface FaturaImportModalProps {
   card: CreditCard
   invoiceMonth: string
   items: InvoiceItemDraft[]
   rawText?: string
+  invoiceTotalCents?: number
   onClose: () => void
-  onSave: (items: InvoiceItemDraft[], filter: InstallmentFilter) => void
+  onSave: (items: InvoiceItemDraft[], filter: InstallmentFilter, totalCents?: number) => void
 }
 
 interface DraftRow extends InvoiceItemDraft {
@@ -35,7 +36,7 @@ function parseSignedAmount(raw: string): number | null {
   return negative ? -absolute : absolute
 }
 
-export function FaturaImportModal({ card, invoiceMonth, items, rawText, onClose, onSave }: FaturaImportModalProps) {
+export function FaturaImportModal({ card, invoiceMonth, items, rawText, invoiceTotalCents, onClose, onSave }: FaturaImportModalProps) {
   const [year, month] = invoiceMonth.split('-').map(Number)
   const defaultDueDate = card.dueDate ?? installmentDueDate(card, year, Math.max(0, month - 1))
   const [rows, setRows] = useState<DraftRow[]>(() => items.map((item) => ({
@@ -43,7 +44,11 @@ export function FaturaImportModal({ card, invoiceMonth, items, rawText, onClose,
     amountInput: centsToInput(item.amountCents),
     dueDate: item.dueDate ?? defaultDueDate,
     included: true,
+    kind: item.kind ?? classifyInvoiceItem(item),
   })))
+  const [totalInput, setTotalInput] = useState(() => (
+    invoiceTotalCents !== undefined ? centsToInput(invoiceTotalCents) : ''
+  ))
   const [fromMonth, setFromMonth] = useState(invoiceMonth)
   const [onlyFrom, setOnlyFrom] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -57,6 +62,13 @@ export function FaturaImportModal({ card, invoiceMonth, items, rawText, onClose,
   }, [invoiceMonth])
 
   const effectiveFilter: InstallmentFilter = onlyFrom ? { fromMonth } : {}
+
+  const selectedTotalCents = useMemo(() => rows.reduce(
+    (sum, row) => sum + (row.included ? parseSignedAmount(row.amountInput) ?? 0 : 0),
+    0,
+  ), [rows])
+  const parsedTotalCents = totalInput.trim() ? parseSignedAmount(totalInput) : null
+  const totalDifferenceCents = parsedTotalCents !== null ? selectedTotalCents - parsedTotalCents : undefined
 
   const plannedCount = useMemo(() => {
     const valid = rows.flatMap((row) => {
@@ -72,6 +84,7 @@ export function FaturaImportModal({ card, invoiceMonth, items, rawText, onClose,
         amountCents,
         currentInstallment,
         installmentCount,
+        kind: row.kind,
         purchaseDate: row.purchaseDate,
         dueDate: row.dueDate ?? defaultDueDate,
         source: row.source,
@@ -101,6 +114,7 @@ export function FaturaImportModal({ card, invoiceMonth, items, rawText, onClose,
       amountCents: 0,
       currentInstallment: 1,
       installmentCount: 1,
+      kind: 'vista',
       dueDate: defaultDueDate,
       included: true,
     }])
@@ -114,6 +128,13 @@ export function FaturaImportModal({ card, invoiceMonth, items, rawText, onClose,
 
     const selected = rows.filter((row) => row.included)
     if (selected.length === 0) return setError('Selecione pelo menos um lançamento para importar.')
+
+    if (totalInput.trim() && parsedTotalCents === null) {
+      return setError('Informe um total da fatura em R$ válido.')
+    }
+    if (parsedTotalCents !== null && parsedTotalCents < 0) {
+      return setError('O total da fatura não pode ser negativo.')
+    }
 
     const parsed: InvoiceItemDraft[] = []
     for (const row of selected) {
@@ -137,13 +158,14 @@ export function FaturaImportModal({ card, invoiceMonth, items, rawText, onClose,
         amountCents,
         currentInstallment,
         installmentCount,
+        kind: row.kind,
         purchaseDate: row.purchaseDate,
         dueDate: row.dueDate ?? defaultDueDate,
         source: row.source,
       })
     }
 
-    onSave(parsed, effectiveFilter)
+    onSave(parsed, effectiveFilter, parsedTotalCents ?? undefined)
   }
 
   return (
@@ -221,6 +243,39 @@ export function FaturaImportModal({ card, invoiceMonth, items, rawText, onClose,
             </p>
           </div>
 
+          <div className="rounded-2xl border border-slate-100 bg-white p-3">
+            <div className="grid gap-2 sm:grid-cols-3">
+              <div>
+                <label className="label" htmlFor="fatura-total-pdf">Total da fatura (R$)</label>
+                <input
+                  id="fatura-total-pdf"
+                  className="field money !py-2 text-sm"
+                  inputMode="decimal"
+                  placeholder="Não detectado"
+                  value={totalInput}
+                  onChange={(event) => setTotalInput(event.target.value)}
+                />
+              </div>
+              <div>
+                <p className="label">Total lido no PDF</p>
+                <p className="money mt-1 text-sm font-bold text-slate-700">
+                  {invoiceTotalCents !== undefined ? formatBRL(invoiceTotalCents) : 'Não detectado'}
+                </p>
+              </div>
+              <div>
+                <p className="label">Total selecionado</p>
+                <p className="money mt-1 text-sm font-bold text-navy">{formatBRL(selectedTotalCents)}</p>
+              </div>
+            </div>
+            {totalDifferenceCents !== undefined && (
+              <p className={`mt-2 text-[11px] font-bold ${totalDifferenceCents === 0 ? 'text-moss-dark' : 'text-rose-700'}`}>
+                {totalDifferenceCents === 0
+                  ? 'Conferência OK: selecionado = total da fatura.'
+                  : `Diferença de ${formatBRL(Math.abs(totalDifferenceCents))} (${totalDifferenceCents > 0 ? 'acima' : 'abaixo'} do total).`}
+              </p>
+            )}
+          </div>
+
           {rows.map((row, index) => (
             <div key={row.id} className={`rounded-2xl border border-slate-100 bg-slate-50/60 p-3 ${row.included ? '' : 'opacity-60'}`}>
               <label className="mb-2 flex items-center gap-2 text-[11px] font-bold text-slate-600">
@@ -256,6 +311,22 @@ export function FaturaImportModal({ card, invoiceMonth, items, rawText, onClose,
                     onChange={(event) => updateRow(row.id, { amountInput: event.target.value })}
                     required={row.included}
                   />
+                </div>
+              </div>
+              <div className="mt-2 grid gap-2 sm:grid-cols-4">
+                <div className="sm:col-span-2">
+                  <label className="label" htmlFor={`fatura-tipo-${row.id}`}>Classificação</label>
+                  <select
+                    id={`fatura-tipo-${row.id}`}
+                    className="field !py-2 text-sm"
+                    value={row.kind ?? 'vista'}
+                    onChange={(event) => updateRow(row.id, { kind: event.target.value as InvoiceItemKind })}
+                  >
+                    <option value="vista">Compra à vista</option>
+                    <option value="parcela">Parcela</option>
+                    <option value="credito">Crédito/Pagamento</option>
+                    <option value="encargo">Encargo/Juros/Multa/IOF</option>
+                  </select>
                 </div>
               </div>
               <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
